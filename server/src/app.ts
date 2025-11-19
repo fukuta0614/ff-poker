@@ -5,30 +5,34 @@
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { GameManager } from './game/GameManager';
+import { createRoutes } from './api/routes';
 
 // 環境変数の読み込み
 dotenv.config();
 
-const app: Application = express();
+export default function createApp(gameManager: GameManager): Application {
+  const app: Application = express();
 
-// ミドルウェア
-app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-  credentials: true,
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+  // ミドルウェア
+  app.use(cors({
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    credentials: true,
+  }));
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
-// ヘルスチェック
-app.get('/health', (_req: Request, res: Response) => {
-  res.json({
-    status: 'ok',
-    timestamp: Date.now(),
+  // ヘルスチェック
+  app.get('/health', (_req: Request, res: Response) => {
+    res.json({
+      status: 'ok',
+      timestamp: Date.now(),
+    });
   });
-});
 
-// ルーティング（今後追加）
-// import routes from './api/routes';
-// app.use('/api', routes);
+  // APIルーティング
+  const apiRoutes = createRoutes(gameManager);
+  app.use('/api', apiRoutes);
 
-export default app;
+  return app;
+}

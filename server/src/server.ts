@@ -5,12 +5,17 @@
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import app from './app';
+import { GameManager } from './game/GameManager';
+import { setupSocketHandlers } from './socket/socketHandler';
 
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
+// GameManagerの初期化
+const gameManager = new GameManager();
+
 // HTTPサーバーの作成
-const httpServer = createServer(app);
+const httpServer = createServer(app(gameManager));
 
 // Socket.IOサーバーの作成
 const io = new SocketIOServer(httpServer, {
@@ -21,17 +26,8 @@ const io = new SocketIOServer(httpServer, {
   },
 });
 
-// Socket.io接続処理
-io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id}`);
-
-  socket.on('disconnect', () => {
-    console.log(`Client disconnected: ${socket.id}`);
-  });
-
-  // イベントハンドラは今後追加
-  // setupSocketHandlers(io, socket, gameManager);
-});
+// Socket.ioハンドラのセットアップ
+setupSocketHandlers(io, gameManager);
 
 // サーバー起動
 httpServer.listen(PORT, () => {
