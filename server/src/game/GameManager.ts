@@ -3,14 +3,18 @@
  * 全てのルームの管理を行う
  */
 
-import { Room, PublicRoomInfo } from '../types/game';
+import { Room, PublicRoomInfo, Player } from '../types/game';
+import { Round } from './Round';
 import { v4 as uuidv4 } from 'uuid';
+import { DEFAULT_BUY_IN, MAX_PLAYERS } from '../utils/constants';
 
 export class GameManager {
   private rooms: Map<string, Room>;
+  private activeRounds: Map<string, Round>; // roomId -> Round
 
   constructor() {
     this.rooms = new Map();
+    this.activeRounds = new Map();
   }
 
   /**
@@ -80,5 +84,151 @@ export class GameManager {
    */
   public getRoomCount(): number {
     return this.rooms.size;
+  }
+
+  /**
+   * プレイヤーをルームに参加させる
+   * @param roomId ルームID
+   * @param playerName プレイヤー名
+   * @returns 参加したプレイヤー情報
+   */
+  public addPlayer(roomId: string, playerName: string): Player {
+    const room = this.rooms.get(roomId);
+    if (!room) throw new Error('Room not found');
+
+    if (room.state !== 'waiting') {
+      throw new Error('Game already started');
+    }
+
+    if (room.players.length >= MAX_PLAYERS) {
+      throw new Error('Room is full');
+    }
+
+    const player: Player = {
+      id: uuidv4(),
+      name: playerName,
+      chips: DEFAULT_BUY_IN,
+      seat: room.players.length,
+      connected: true,
+      lastSeen: Date.now(),
+    };
+
+    room.players.push(player);
+    console.log(`Player ${playerName} joined room ${roomId}`);
+
+    return player;
+  }
+
+  /**
+   * ゲーム開始
+   * @param roomId ルームID
+   */
+  public startGame(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) throw new Error('Room not found');
+
+    if (room.state !== 'waiting') {
+      throw new Error('Game already started');
+    }
+
+    if (room.players.length < 2) {
+      throw new Error('Need at least 2 players');
+    }
+
+    room.state = 'in_progress';
+
+    // 新しいラウンドを開始
+    this.startNewRound(roomId);
+  }
+
+  /**
+   * 新しいラウンドを開始
+   * @param roomId ルームID
+   */
+  private startNewRound(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) throw new Error('Room not found');
+
+    const round = new Round(
+      room.players,
+      room.dealerIndex,
+      room.smallBlind,
+      room.bigBlind
+    );
+
+    round.start();
+    this.activeRounds.set(roomId, round);
+
+    console.log(`Round started in room ${roomId}`);
+  }
+
+  /**
+   * プレイヤーアクションを実行
+   * @param roomId ルームID
+   * @param playerId プレイヤーID
+   * @param action アクション
+   * @param amount 金額（レイズ時）
+   */
+  public executePlayerAction(
+    roomId: string,
+    playerId: string,
+    action: 'fold' | 'call' | 'raise' | 'check' | 'allin',
+    amount?: number
+  ): void {
+    const round = this.activeRounds.get(roomId);
+    if (!round) throw new Error('No active round');
+
+    round.executeAction(playerId, action, amount);
+
+    // ベッティングラウンド完了チェック
+    if (round.isBettingComplete()) {
+      if (round.getState() === 'river') {
+        // ショーダウンへ
+        round.advanceRound();
+        const winnings = round.performShowdown();
+        console.log('Showdown results:', winnings);
+
+        // ラウンド終了処理
+        this.endRound(roomId);
+      } else {
+        // 次のストリートへ
+        round.advanceRound();
+      }
+    }
+  }
+
+  /**
+   * ラウンド終了処理
+   * @param roomId ルームID
+   */
+  private endRound(roomId: string): void {
+    const room = this.rooms.get(roomId);
+    if (!room) throw new Error('Room not found');
+
+    this.activeRounds.delete(roomId);
+
+    // ディーラーボタンを移動
+    room.dealerIndex = (room.dealerIndex + 1) % room.players.length;
+
+    // チップが0のプレイヤーを除外
+    room.players = room.players.filter((p) => p.chips > 0);
+
+    if (room.players.length < 2) {
+      // ゲーム終了
+      room.state = 'finished';
+      console.log(`Game finished in room ${roomId}`);
+    } else {
+      // 次のラウンドを開始
+      this.startNewRound(roomId);
+    }
+  }
+
+  /**
+   * アクティブなラウンドを取得
+   * @param roomId ルームID
+   * @returns ラウンド、存在しない場合はundefined
+   */
+  public getActiveRound(roomId: string): Round | undefined {
+    return this.activeRounds.get(roomId);
   }
 }

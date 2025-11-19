@@ -34,58 +34,149 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
     // ルーム参加
     socket.on('joinRoom', (data: JoinRoomData) => {
       try {
-        const room = gameManager.getRoom(data.roomId);
-
-        if (!room) {
-          socket.emit('error', { message: 'Room not found', code: 'ROOM_NOT_FOUND' });
-          return;
-        }
+        const player = gameManager.addPlayer(data.roomId, data.playerName);
 
         // socketをルームに参加させる
         socket.join(data.roomId);
 
+        // プレイヤーIDを保存
+        (socket as any).playerId = player.id;
+        (socket as any).roomId = data.roomId;
+
         // 参加通知
         socket.emit('joinedRoom', {
           roomId: data.roomId,
+          playerId: player.id,
           playerName: data.playerName,
         });
 
         // ルームの他のメンバーに通知
         socket.to(data.roomId).emit('playerJoined', {
+          playerId: player.id,
           playerName: data.playerName,
+          seat: player.seat,
         });
 
         console.log(`${data.playerName} joined room: ${data.roomId}`);
       } catch (error) {
-        socket.emit('error', { message: 'Failed to join room', code: 'JOIN_ROOM_ERROR' });
+        const message = error instanceof Error ? error.message : 'Failed to join room';
+        socket.emit('error', { message, code: 'JOIN_ROOM_ERROR' });
       }
     });
 
-    // ゲーム開始（プレースホルダー）
+    // ゲーム開始
     socket.on('startGame', (data: StartGameData) => {
       try {
-        const room = gameManager.getRoom(data.roomId);
+        gameManager.startGame(data.roomId);
 
-        if (!room) {
-          socket.emit('error', { message: 'Room not found', code: 'ROOM_NOT_FOUND' });
+        const room = gameManager.getRoom(data.roomId);
+        const round = gameManager.getActiveRound(data.roomId);
+
+        if (!room || !round) {
+          socket.emit('error', { message: 'Failed to start game', code: 'START_GAME_ERROR' });
           return;
         }
 
-        // ゲーム開始ロジックは今後実装
-        io.to(data.roomId).emit('gameStarted', {
-          roomId: data.roomId,
+        // 全プレイヤーにゲーム開始を通知
+        for (const player of room.players) {
+          const hand = round.getPlayerHand(player.id);
+          io.to(data.roomId).emit('gameStarted', {
+            roomId: data.roomId,
+            dealerIndex: room.dealerIndex,
+            players: room.players.map((p) => ({
+              id: p.id,
+              name: p.name,
+              chips: p.chips,
+              seat: p.seat,
+            })),
+          });
+
+          // 各プレイヤーに手札を個別送信
+          if (hand) {
+            io.to(data.roomId).emit('dealHand', {
+              playerId: player.id,
+              hand: hand,
+            });
+          }
+        }
+
+        // 最初のプレイヤーにターン通知
+        io.to(data.roomId).emit('turnNotification', {
+          playerId: round.getCurrentBettorId(),
+          currentBet: round.getPlayerBet(round.getCurrentBettorId()),
         });
 
         console.log(`Game started in room: ${data.roomId}`);
       } catch (error) {
-        socket.emit('error', { message: 'Failed to start game', code: 'START_GAME_ERROR' });
+        const message = error instanceof Error ? error.message : 'Failed to start game';
+        socket.emit('error', { message, code: 'START_GAME_ERROR' });
       }
     });
 
-    // プレイヤーアクション（プレースホルダー）
+    // プレイヤーアクション
     socket.on('action', (data: ActionData) => {
-      // アクション処理は今後実装
-      console.log(`Action received from ${data.playerId}: ${data.action.type}`);
+      try {
+        const { playerId, action } = data;
+        const roomId = (socket as any).roomId;
+
+        if (!roomId) {
+          socket.emit('error', { message: 'Not in a room', code: 'NOT_IN_ROOM' });
+          return;
+        }
+
+        const round = gameManager.getActiveRound(roomId);
+        if (!round) {
+          socket.emit('error', { message: 'No active round', code: 'NO_ACTIVE_ROUND' });
+          return;
+        }
+
+        // アクション実行 ('bet'は'raise'として扱う)
+        const actionType = action.type === 'bet' ? 'raise' : action.type;
+        gameManager.executePlayerAction(roomId, playerId, actionType, action.amount);
+
+        const room = gameManager.getRoom(roomId);
+        if (!room) return;
+
+        // 全プレイヤーにアクション通知
+        io.to(roomId).emit('actionPerformed', {
+          playerId,
+          action: action.type,
+          amount: action.amount,
+          pot: round.getPot(),
+        });
+
+        // ラウンドの状態に応じて通知
+        if (round.isComplete()) {
+          // ショーダウン結果を通知
+          io.to(roomId).emit('showdown', {
+            players: room.players.map((p) => ({
+              id: p.id,
+              chips: p.chips,
+              hand: round.getPlayerHand(p.id),
+            })),
+          });
+        } else if (round.isBettingComplete()) {
+          // 次のストリートへ
+          io.to(roomId).emit('newStreet', {
+            state: round.getState(),
+            communityCards: round.getCommunityCards(),
+          });
+        }
+
+        // 次のプレイヤーにターン通知
+        const activeRound = gameManager.getActiveRound(roomId);
+        if (activeRound && !activeRound.isComplete()) {
+          io.to(roomId).emit('turnNotification', {
+            playerId: activeRound.getCurrentBettorId(),
+            currentBet: activeRound.getPlayerBet(activeRound.getCurrentBettorId()),
+          });
+        }
+
+        console.log(`Action received from ${playerId}: ${action.type}`);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to execute action';
+        socket.emit('error', { message, code: 'ACTION_ERROR' });
+      }
     });
 
     // チャットメッセージ
