@@ -5,12 +5,12 @@
 
 import React, { useState } from 'react';
 import { useSocket } from '../contexts/SocketContext';
-import { useGame } from '../contexts/GameContext';
+import { useGame, Player } from '../contexts/GameContext';
 import { useNavigate } from 'react-router-dom';
 
 export const Lobby: React.FC = () => {
   const { socket, connected } = useSocket();
-  const { setRoomId, setPlayerId } = useGame();
+  const { setRoomId, setPlayerId, setPlayers } = useGame();
   const navigate = useNavigate();
 
   const [playerName, setPlayerName] = useState('');
@@ -44,7 +44,8 @@ export const Lobby: React.FC = () => {
         playerName,
       });
 
-      socket.once('joinedRoom', () => {
+      socket.once('joinedRoom', (joinData: { roomId: string; playerId: string; players: Player[] }) => {
+        setPlayers(joinData.players);
         setLoading(false);
         navigate(`/room/${data.roomId}`);
       });
@@ -70,10 +71,11 @@ export const Lobby: React.FC = () => {
       playerName,
     });
 
-    socket.once('joinedRoom', (data: { roomId: string; playerId: string }) => {
+    socket.once('joinedRoom', (data: { roomId: string; playerId: string; players: Player[] }) => {
       console.log('Joined room:', data);
       setRoomId(data.roomId);
       setPlayerId(data.playerId);
+      setPlayers(data.players);
       setLoading(false);
       navigate(`/room/${data.roomId}`);
     });

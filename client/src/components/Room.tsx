@@ -93,6 +93,7 @@ export const Room: React.FC = () => {
       playerId: string;
       playerName: string;
       seat: number;
+      chips: number;
     }) => {
       console.log('Player joined:', data);
       setPlayers((prev) => [
@@ -100,7 +101,7 @@ export const Room: React.FC = () => {
         {
           id: data.playerId,
           name: data.playerName,
-          chips: 1000, // デフォルト値
+          chips: data.chips,
           seat: data.seat,
         },
       ]);

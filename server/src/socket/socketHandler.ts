@@ -34,6 +34,12 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
     // ルーム参加
     socket.on('joinRoom', (data: JoinRoomData) => {
       try {
+        const room = gameManager.getRoom(data.roomId);
+        if (!room) {
+          socket.emit('error', { message: 'Room not found', code: 'ROOM_NOT_FOUND' });
+          return;
+        }
+
         const player = gameManager.addPlayer(data.roomId, data.playerName);
 
         // socketをルームに参加させる
@@ -43,11 +49,17 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
         (socket as any).playerId = player.id;
         (socket as any).roomId = data.roomId;
 
-        // 参加通知
+        // 参加通知（全プレイヤー情報を含める）
         socket.emit('joinedRoom', {
           roomId: data.roomId,
           playerId: player.id,
           playerName: data.playerName,
+          players: room.players.map((p) => ({
+            id: p.id,
+            name: p.name,
+            chips: p.chips,
+            seat: p.seat,
+          })),
         });
 
         // ルームの他のメンバーに通知
@@ -55,6 +67,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           playerId: player.id,
           playerName: data.playerName,
           seat: player.seat,
+          chips: player.chips,
         });
 
         console.log(`${data.playerName} joined room: ${data.roomId}`);
