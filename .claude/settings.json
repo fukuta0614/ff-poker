@@ -1,0 +1,62 @@
+{
+  "allow": {
+    "Read": [
+      "*"
+    ],
+    "Grep": [
+      "*"
+    ],
+    "Glob": [
+      "*"
+    ],
+    "Edit": [
+      "*"
+    ],
+    "Write": [
+      "*"
+    ],
+    "Bash": [
+      "npm *",
+      "node *",
+      "git *",
+      "docker *",
+      "docker-compose *",
+      "ls *",
+      "mkdir *",
+      "pwd",
+      "cd *",
+      "cat *",
+      "grep *",
+      "find *"
+    ]
+  },
+  "deny": {
+    "Read": [
+      ".env",
+      "**/.env",
+      "**/.env.*",
+      "**/secrets/**",
+      "**/*.key",
+      "**/*.pem",
+      "**/credentials.json"
+    ],
+    "Write": [
+      ".env",
+      "**/.env"
+    ],
+    "Bash": [
+      "rm -rf *",
+      "sudo *",
+      "chmod *",
+      "chown *"
+    ]
+  },
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "hooks": {
+    "userPromptSubmit": [],
+    "preToolCall": [],
+    "postToolCall": []
+  }
+}
