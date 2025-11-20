@@ -1,0 +1,32 @@
+[build]
+  # ビルドのベースディレクトリ
+  base = "client"
+
+  # ビルドコマンド
+  command = "npm run build"
+
+  # 公開するディレクトリ
+  publish = "dist"
+
+[build.environment]
+  # Node.jsのバージョン
+  NODE_VERSION = "20"
+
+# SPAのためのリダイレクト設定（React Routerを使用する場合）
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# 本番環境の設定
+[context.production]
+  # 本番環境の環境変数はNetlifyのダッシュボードで設定
+  # VITE_SERVER_URL=https://your-api.onrender.com
+
+# プレビューデプロイの設定
+[context.deploy-preview]
+  command = "npm run build"
+
+# ブランチデプロイの設定
+[context.branch-deploy]
+  command = "npm run build"
