@@ -90,26 +90,32 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           return;
         }
 
-        // 全プレイヤーにゲーム開始を通知
+        // ゲーム開始を1回だけルーム全体に送信
+        io.to(data.roomId).emit('gameStarted', {
+          roomId: data.roomId,
+          dealerIndex: room.dealerIndex,
+          players: room.players.map((p) => ({
+            id: p.id,
+            name: p.name,
+            chips: p.chips,
+            seat: p.seat,
+          })),
+        });
+
+        // 各プレイヤーに個別に手札を送信
         for (const player of room.players) {
           const hand = round.getPlayerHand(player.id);
-          io.to(data.roomId).emit('gameStarted', {
-            roomId: data.roomId,
-            dealerIndex: room.dealerIndex,
-            players: room.players.map((p) => ({
-              id: p.id,
-              name: p.name,
-              chips: p.chips,
-              seat: p.seat,
-            })),
-          });
-
-          // 各プレイヤーに手札を個別送信
           if (hand) {
-            io.to(data.roomId).emit('dealHand', {
-              playerId: player.id,
-              hand: hand,
-            });
+            // socket IDを見つけて個別送信
+            const playerSocket = Array.from(io.sockets.sockets.values())
+              .find(s => (s as any).playerId === player.id);
+
+            if (playerSocket) {
+              playerSocket.emit('dealHand', {
+                playerId: player.id,
+                hand: hand,
+              });
+            }
           }
         }
 
@@ -145,7 +151,16 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
         // アクション実行 ('bet'は'raise'として扱う)
         const actionType = action.type === 'bet' ? 'raise' : action.type;
-        gameManager.executePlayerAction(roomId, playerId, actionType, action.amount);
+
+        try {
+          gameManager.executePlayerAction(roomId, playerId, actionType, action.amount);
+        } catch (actionError) {
+          // アクションエラーを個別に処理
+          const message = actionError instanceof Error ? actionError.message : 'Invalid action';
+          socket.emit('error', { message, code: 'ACTION_ERROR' });
+          console.error(`Action error from ${playerId}: ${message}`);
+          return;
+        }
 
         const room = gameManager.getRoom(roomId);
         if (!room) return;
