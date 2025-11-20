@@ -5,7 +5,8 @@
 
 import React, { useState } from 'react';
 import { useSocket } from '../contexts/SocketContext';
-import { useGame, Player } from '../contexts/GameContext';
+import { useGame } from '../contexts/GameContext';
+import type { Player } from '../contexts/GameContext';
 import { useNavigate } from 'react-router-dom';
 
 export const Lobby: React.FC = () => {
