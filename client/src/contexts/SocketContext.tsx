@@ -28,6 +28,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const socketInstance = io(SOCKET_URL, {
       transports: ['websocket'],
       autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
     socketInstance.on('connect', () => {
