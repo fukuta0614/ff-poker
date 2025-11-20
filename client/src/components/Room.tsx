@@ -158,6 +158,7 @@ export const Room: React.FC = () => {
               marginBottom: '5px',
               backgroundColor: player.id === gameState.playerId ? '#e3f2fd' : '#f5f5f5',
               border: player.id === gameState.currentBettorId ? '2px solid green' : '1px solid #ddd',
+              color: '#333',
             }}
           >
             <strong>{player.name}</strong> - Seat {player.seat} - Chips: {player.chips}
