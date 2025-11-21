@@ -22,6 +22,7 @@ export interface GameState {
   communityCards: string[];
   myHand: [string, string] | null;
   roundStage: 'waiting' | 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
+  playerBets: Record<string, number>; // 各プレイヤーの現在のベット額
 }
 
 interface GameContextType {
@@ -35,6 +36,7 @@ interface GameContextType {
   setCommunityCards: (cards: string[]) => void;
   setMyHand: (hand: [string, string]) => void;
   setRoundStage: (stage: GameState['roundStage']) => void;
+  setPlayerBets: (bets: Record<string, number>) => void;
   resetGame: () => void;
 }
 
@@ -48,6 +50,7 @@ const initialGameState: GameState = {
   communityCards: [],
   myHand: null,
   roundStage: 'waiting',
+  playerBets: {},
 };
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -103,6 +106,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setGameState((prev) => ({ ...prev, roundStage: stage }));
   };
 
+  const setPlayerBets = (bets: Record<string, number>) => {
+    setGameState((prev) => ({ ...prev, playerBets: bets }));
+  };
+
   const resetGame = () => {
     setGameState(initialGameState);
   };
@@ -120,6 +127,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setCommunityCards,
         setMyHand,
         setRoundStage,
+        setPlayerBets,
         resetGame,
       }}
     >

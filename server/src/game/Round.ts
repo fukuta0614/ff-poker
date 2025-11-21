@@ -457,4 +457,12 @@ export class Round {
   public getPlayerBet(playerId: string): number {
     return this.playerBets.get(playerId) || 0;
   }
+
+  public getAllPlayerBets(): Record<string, number> {
+    const bets: Record<string, number> = {};
+    for (const [playerId, bet] of this.playerBets) {
+      bets[playerId] = bet;
+    }
+    return bets;
+  }
 }

@@ -123,6 +123,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
         io.to(data.roomId).emit('turnNotification', {
           playerId: round.getCurrentBettorId(),
           currentBet: round.getPlayerBet(round.getCurrentBettorId()),
+          playerBets: round.getAllPlayerBets(),
         });
 
         console.log(`Game started in room: ${data.roomId}`);
@@ -171,10 +172,14 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           action: action.type,
           amount: action.amount,
           pot: round.getPot(),
+          playerBets: round.getAllPlayerBets(),
         });
 
         // ラウンドの状態に応じて通知
         if (round.isComplete()) {
+          // ショーダウン実行
+          round.performShowdown();
+
           // ショーダウン結果を通知
           io.to(roomId).emit('showdown', {
             players: room.players.map((p) => ({
@@ -184,7 +189,10 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
             })),
           });
         } else if (round.isBettingComplete()) {
-          // 次のストリートへ
+          // 次のストリートへ進む（重要！）
+          round.advanceRound();
+
+          // 新しいストリート情報を通知
           io.to(roomId).emit('newStreet', {
             state: round.getState(),
             communityCards: round.getCommunityCards(),
@@ -197,6 +205,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           io.to(roomId).emit('turnNotification', {
             playerId: activeRound.getCurrentBettorId(),
             currentBet: activeRound.getPlayerBet(activeRound.getCurrentBettorId()),
+            playerBets: activeRound.getAllPlayerBets(),
           });
         }
 

@@ -20,6 +20,7 @@ export const Room: React.FC = () => {
     setCommunityCards,
     setMyHand,
     setRoundStage,
+    setPlayerBets,
   } = useGame();
 
   const [canStart, setCanStart] = useState(false);
@@ -48,8 +49,11 @@ export const Room: React.FC = () => {
     });
 
     // ターン通知
-    socket.on('turnNotification', (data: { playerId: string; currentBet: number }) => {
+    socket.on('turnNotification', (data: { playerId: string; currentBet: number; playerBets?: Record<string, number> }) => {
       setCurrentBettorId(data.playerId);
+      if (data.playerBets) {
+        setPlayerBets(data.playerBets);
+      }
     });
 
     // アクション実行通知
@@ -58,9 +62,13 @@ export const Room: React.FC = () => {
       action: string;
       amount?: number;
       pot: number;
+      playerBets?: Record<string, number>;
     }) => {
       console.log('Action performed:', data);
       setPot(data.pot);
+      if (data.playerBets) {
+        setPlayerBets(data.playerBets);
+      }
     });
 
     // 新しいストリート
@@ -150,22 +158,26 @@ export const Room: React.FC = () => {
 
       <div style={{ marginBottom: '20px' }}>
         <h2>Players ({gameState.players.length})</h2>
-        {gameState.players.map((player) => (
-          <div
-            key={player.id}
-            style={{
-              padding: '10px',
-              marginBottom: '5px',
-              backgroundColor: player.id === gameState.playerId ? '#e3f2fd' : '#f5f5f5',
-              border: player.id === gameState.currentBettorId ? '2px solid green' : '1px solid #ddd',
-              color: '#333',
-            }}
-          >
-            <strong>{player.name}</strong> - Seat {player.seat} - Chips: {player.chips}
-            {player.id === gameState.playerId && ' (You)'}
-            {player.id === gameState.currentBettorId && ' 🎯'}
-          </div>
-        ))}
+        {gameState.players.map((player) => {
+          const playerBet = gameState.playerBets[player.id] || 0;
+          return (
+            <div
+              key={player.id}
+              style={{
+                padding: '10px',
+                marginBottom: '5px',
+                backgroundColor: player.id === gameState.playerId ? '#e3f2fd' : '#f5f5f5',
+                border: player.id === gameState.currentBettorId ? '2px solid green' : '1px solid #ddd',
+                color: '#333',
+              }}
+            >
+              <strong>{player.name}</strong> - Seat {player.seat} - Chips: {player.chips}
+              {playerBet > 0 && ` | Bet: ${playerBet}`}
+              {player.id === gameState.playerId && ' (You)'}
+              {player.id === gameState.currentBettorId && ' 🎯'}
+            </div>
+          );
+        })}
       </div>
 
       {gameState.roundStage === 'waiting' && canStart && (

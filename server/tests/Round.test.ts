@@ -198,3 +198,207 @@ describe('Round - ショーダウン', () => {
     expect(players[0].chips).toBe(p1InitialChips + 10);
   });
 });
+
+describe('Round - ゲームフロー完全テスト（選択肢が現れない問題の調査）', () => {
+  let players: Player[];
+
+  beforeEach(() => {
+    players = [
+      { id: 'p1', name: 'Alice', chips: 1000, seat: 0, connected: true, lastSeen: Date.now() },
+      { id: 'p2', name: 'Bob', chips: 1000, seat: 1, connected: true, lastSeen: Date.now() },
+      { id: 'p3', name: 'Charlie', chips: 1000, seat: 2, connected: true, lastSeen: Date.now() },
+    ];
+  });
+
+  test('3人プレイ: プリフロップ全員コール→フロップ全員チェックでターンへ進む', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    // プリフロップ: p1(UTG)→p2(SB)→p3(BB)
+    expect(round.getCurrentBettorId()).toBe('p1');
+    expect(round.isBettingComplete()).toBe(false);
+
+    round.executeAction('p1', 'call'); // p1: 20
+    expect(round.getCurrentBettorId()).toBe('p2');
+    expect(round.isBettingComplete()).toBe(false);
+
+    round.executeAction('p2', 'call'); // p2: 20 (10→20)
+    expect(round.getCurrentBettorId()).toBe('p3');
+    expect(round.isBettingComplete()).toBe(false);
+
+    round.executeAction('p3', 'check'); // p3: 20 (already BB)
+    expect(round.isBettingComplete()).toBe(true);
+
+    // フロップへ
+    round.advanceRound();
+    expect(round.getState()).toBe('flop');
+    expect(round.getCommunityCards().length).toBe(3);
+
+    // フロップ: p2(SB)→p3(BB)→p1
+    expect(round.getCurrentBettorId()).toBe('p2');
+    expect(round.isBettingComplete()).toBe(false);
+
+    round.executeAction('p2', 'check');
+    expect(round.getCurrentBettorId()).toBe('p3');
+    expect(round.isBettingComplete()).toBe(false);
+
+    round.executeAction('p3', 'check');
+    expect(round.getCurrentBettorId()).toBe('p1');
+    expect(round.isBettingComplete()).toBe(false);
+
+    round.executeAction('p1', 'check');
+    expect(round.isBettingComplete()).toBe(true);
+
+    // ターンへ
+    round.advanceRound();
+    expect(round.getState()).toBe('turn');
+    expect(round.getCommunityCards().length).toBe(4);
+  });
+
+  test('3人プレイ: フロップでレイズ→コール→コールで進む', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    // プリフロップ: 全員コール
+    round.executeAction('p1', 'call');
+    round.executeAction('p2', 'call');
+    round.executeAction('p3', 'check');
+
+    // フロップへ
+    round.advanceRound();
+    expect(round.getState()).toBe('flop');
+
+    // フロップ: p2がレイズ
+    expect(round.getCurrentBettorId()).toBe('p2');
+    round.executeAction('p2', 'raise', 50);
+    expect(round.getCurrentBettorId()).toBe('p3');
+    expect(round.isBettingComplete()).toBe(false);
+
+    // p3がコール
+    round.executeAction('p3', 'call');
+    expect(round.getCurrentBettorId()).toBe('p1');
+    expect(round.isBettingComplete()).toBe(false);
+
+    // p1がコール
+    round.executeAction('p1', 'call');
+    expect(round.isBettingComplete()).toBe(true);
+
+    // ターンへ進める
+    round.advanceRound();
+    expect(round.getState()).toBe('turn');
+  });
+
+  test('3人プレイ: フロップでベット→フォールド→コールで進む', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    // プリフロップ: 全員コール
+    round.executeAction('p1', 'call');
+    round.executeAction('p2', 'call');
+    round.executeAction('p3', 'check');
+
+    // フロップへ
+    round.advanceRound();
+
+    // p2がレイズ
+    round.executeAction('p2', 'raise', 50);
+
+    // p3がフォールド
+    round.executeAction('p3', 'fold');
+    expect(round.getCurrentBettorId()).toBe('p1');
+    expect(round.isBettingComplete()).toBe(false);
+
+    // p1がコール
+    round.executeAction('p1', 'call');
+    expect(round.isBettingComplete()).toBe(true);
+  });
+
+  test('2人プレイ: プリフロップでSBがレイズ→BBがコールで進む', () => {
+    const twoPlayers: Player[] = [
+      { id: 'p1', name: 'Alice', chips: 1000, seat: 0, connected: true, lastSeen: Date.now() },
+      { id: 'p2', name: 'Bob', chips: 1000, seat: 1, connected: true, lastSeen: Date.now() },
+    ];
+
+    const round = new Round(twoPlayers, 0, 10, 20);
+    round.start();
+
+    // 2人プレイ: p1=Dealer/BB, p2=SB
+    // プリフロップ: p2が最初
+    expect(round.getCurrentBettorId()).toBe('p2');
+
+    round.executeAction('p2', 'raise', 40);
+    expect(round.getCurrentBettorId()).toBe('p1');
+    expect(round.isBettingComplete()).toBe(false);
+
+    round.executeAction('p1', 'call');
+    expect(round.isBettingComplete()).toBe(true);
+
+    // フロップへ
+    round.advanceRound();
+    expect(round.getState()).toBe('flop');
+  });
+
+  test('ベッティング完了後もターンが正しく管理される', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    // プリフロップ完了
+    round.executeAction('p1', 'call');
+    round.executeAction('p2', 'call');
+    round.executeAction('p3', 'check');
+    expect(round.isBettingComplete()).toBe(true);
+
+    // この時点でcurrentBettorIdは次のプレイヤーを指しているはず
+    // advanceRound()を呼ぶ前に、現在のベッターを確認
+    const bettorBeforeAdvance = round.getCurrentBettorId();
+
+    round.advanceRound();
+
+    // フロップでは最初はSB（p2）から
+    expect(round.getCurrentBettorId()).toBe('p2');
+  });
+
+  test('全員チェック後にベッティング完了となる', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    round.executeAction('p1', 'call');
+    round.executeAction('p2', 'call');
+    round.executeAction('p3', 'check');
+    round.advanceRound();
+
+    // フロップで全員チェック
+    expect(round.isBettingComplete()).toBe(false);
+    round.executeAction('p2', 'check');
+    expect(round.isBettingComplete()).toBe(false);
+    round.executeAction('p3', 'check');
+    expect(round.isBettingComplete()).toBe(false);
+    round.executeAction('p1', 'check');
+    expect(round.isBettingComplete()).toBe(true);
+  });
+
+  test('レイズ後、全員がレイズ前の最後のプレイヤーまでアクションする', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    round.executeAction('p1', 'call');
+    round.executeAction('p2', 'call');
+    round.executeAction('p3', 'check');
+    round.advanceRound();
+
+    // フロップ: p2チェック→p3チェック→p1がレイズ
+    round.executeAction('p2', 'check');
+    round.executeAction('p3', 'check');
+    round.executeAction('p1', 'raise', 50);
+
+    expect(round.isBettingComplete()).toBe(false);
+
+    // p2がコール
+    round.executeAction('p2', 'call');
+    expect(round.isBettingComplete()).toBe(false);
+
+    // p3がコールで完了
+    round.executeAction('p3', 'call');
+    expect(round.isBettingComplete()).toBe(true);
+  });
+});
