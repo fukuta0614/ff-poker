@@ -64,21 +64,43 @@ npm run dev:server  # http://localhost:3000
 
 ### テスト実行
 
+#### ユニットテスト
+
 ```bash
-# すべてのテスト実行
+# サーバー側ユニットテスト
+cd server
 npm test
-
-# クライアントのテスト
-npm run test:client
-
-# サーバーのテスト
-npm run test:server
-
-# E2Eテスト
-npm run test:e2e
 
 # カバレッジ確認
 npm run test:coverage
+```
+
+#### 統合テスト
+
+統合テストでは、Socket.io通信を含む完全なゲームフローをテストします。
+
+**前提条件**:
+```bash
+cd server
+npm install --save-dev socket.io-client
+```
+
+**実行**:
+```bash
+cd server
+npm test tests/integration/
+```
+
+**デバッグ**:
+統合テスト実行時に詳細なログが出力されます。`[DEBUG]`、`[INFO]`、`[ERROR]`プレフィックスでログを確認できます。
+
+詳細は [docs/test-design.md](./docs/test-design.md) を参照してください。
+
+#### E2Eテスト（マイルストーンB）
+
+```bash
+# E2Eテスト（Playwright）
+npm run test:e2e
 ```
 
 ## 開発フロー
@@ -146,10 +168,29 @@ main (本番)
 ## ドキュメント
 
 - [技術スタック](./docs/tech-stack.md)
+- [テスト設計書](./docs/test-design.md)
+- [実装計画](./docs/design/implementation-plan.md)
+- [バグレポート](./docs/bug-report.md)
 - [API仕様](./docs/api/)
 - [機能説明](./docs/features/)
 - [設計文書](./docs/design/)
 - [開発ガイド](./docs/guides/)
+
+## トラブルシューティング
+
+### Node.js環境エラー
+
+`libicui18n.74.dylib`関連のエラーが出る場合:
+
+```bash
+# Homebrewでicu4cを再インストール
+brew reinstall icu4c
+
+# またはNode.jsを再インストール
+brew reinstall node
+```
+
+詳細は [CLAUDE.md](./.claude/CLAUDE.md) のトラブルシューティングセクションを参照してください。
 
 ## ライセンス
 
@@ -157,4 +198,4 @@ MIT
 
 ---
 
-最終更新: 2025-11-19
+最終更新: 2025-11-21

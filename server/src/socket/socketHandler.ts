@@ -141,6 +141,8 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
         const { playerId, action } = data;
         const roomId = (socket as any).roomId;
 
+        console.log(`[DEBUG] action received - playerId: ${playerId}, action: ${action.type}, amount: ${action.amount}`);
+
         if (!roomId) {
           socket.emit('error', { message: 'Not in a room', code: 'NOT_IN_ROOM' });
           return;
@@ -152,6 +154,10 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           return;
         }
 
+        console.log(`[DEBUG] Before action - currentBettorId: ${round.getCurrentBettorId()}`);
+        console.log(`[DEBUG] Before action - isBettingComplete: ${round.isBettingComplete()}`);
+        console.log(`[DEBUG] Before action - isComplete: ${round.isComplete()}`);
+
         // アクション実行 ('bet'は'raise'として扱う)
         const actionType = action.type === 'bet' ? 'raise' : action.type;
 
@@ -161,12 +167,16 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           // アクションエラーを個別に処理
           const message = actionError instanceof Error ? actionError.message : 'Invalid action';
           socket.emit('error', { message, code: 'ACTION_ERROR' });
-          console.error(`Action error from ${playerId}: ${message}`);
+          console.error(`[ERROR] Action error from ${playerId}: ${message}`);
           return;
         }
 
         const room = gameManager.getRoom(roomId);
         if (!room) return;
+
+        console.log(`[DEBUG] After action - currentBettorId: ${round.getCurrentBettorId()}`);
+        console.log(`[DEBUG] After action - isBettingComplete: ${round.isBettingComplete()}`);
+        console.log(`[DEBUG] After action - isComplete: ${round.isComplete()}`);
 
         // 全プレイヤーにアクション通知
         io.to(roomId).emit('actionPerformed', {
@@ -179,6 +189,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
         // ラウンドの状態に応じて通知
         if (round.isComplete()) {
+          console.log(`[DEBUG] Round complete - performing showdown`);
           // ショーダウン実行
           round.performShowdown();
 
@@ -191,8 +202,11 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
             })),
           });
         } else if (round.isBettingComplete()) {
+          console.log(`[DEBUG] Betting complete - advancing to next street`);
           // 次のストリートへ進む（重要！）
           round.advanceRound();
+
+          console.log(`[DEBUG] New street: ${round.getState()}`);
 
           // 新しいストリート情報を通知
           io.to(roomId).emit('newStreet', {
@@ -203,6 +217,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           // 次のストリートの最初のプレイヤーにターン通知
           if (!round.isComplete()) {
             const nextBettorId = round.getCurrentBettorId();
+            console.log(`[DEBUG] Emitting turnNotification to: ${nextBettorId}`);
             io.to(roomId).emit('turnNotification', {
               playerId: nextBettorId,
               currentBet: round.getPlayerBet(nextBettorId),
@@ -211,8 +226,10 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
             });
           }
         } else {
+          console.log(`[DEBUG] Betting continues - notifying next player`);
           // ベッティング継続中: 次のプレイヤーにターン通知
           const nextBettorId = round.getCurrentBettorId();
+          console.log(`[DEBUG] Emitting turnNotification to: ${nextBettorId}`);
           io.to(roomId).emit('turnNotification', {
             playerId: nextBettorId,
             currentBet: round.getPlayerBet(nextBettorId),
@@ -221,10 +238,11 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           });
         }
 
-        console.log(`Action received from ${playerId}: ${action.type}`);
+        console.log(`[INFO] Action completed - ${playerId}: ${action.type}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to execute action';
         socket.emit('error', { message, code: 'ACTION_ERROR' });
+        console.error(`[ERROR] Unexpected error: ${message}`);
       }
     });
 
