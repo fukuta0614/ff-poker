@@ -465,4 +465,60 @@ export class Round {
     }
     return bets;
   }
+
+  /**
+   * プレイヤーが実行可能なアクション一覧を取得
+   */
+  public getValidActions(playerId: string): Array<'fold' | 'check' | 'call' | 'raise' | 'allin'> {
+    const validActions: Array<'fold' | 'check' | 'call' | 'raise' | 'allin'> = [];
+
+    // ターンでなければ何もできない
+    if (playerId !== this.getCurrentBettorId()) {
+      return validActions;
+    }
+
+    // フォールド済みなら何もできない
+    if (this.folded.has(playerId)) {
+      return validActions;
+    }
+
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player) return validActions;
+
+    // チップがなければ何もできない（オールイン済み）
+    if (player.chips === 0) {
+      return validActions;
+    }
+
+    const currentBet = this.getCurrentBet();
+    const playerBet = this.playerBets.get(playerId) || 0;
+    const callAmount = currentBet - playerBet;
+
+    // フォールドは常に可能
+    validActions.push('fold');
+
+    // チェック可能条件: ベット額が揃っている
+    if (playerBet >= currentBet) {
+      validActions.push('check');
+    }
+
+    // コール可能条件: ベットがある、かつチップがある
+    if (callAmount > 0 && player.chips > 0) {
+      validActions.push('call');
+    }
+
+    // レイズ可能条件: チップが最小レイズ額以上ある
+    const minRaiseTotal = currentBet + this.minRaiseAmount;
+    const requiredChips = minRaiseTotal - playerBet;
+    if (player.chips >= requiredChips) {
+      validActions.push('raise');
+    }
+
+    // オールイン可能条件: チップがある
+    if (player.chips > 0) {
+      validActions.push('allin');
+    }
+
+    return validActions;
+  }
 }

@@ -402,3 +402,124 @@ describe('Round - ゲームフロー完全テスト（選択肢が現れない�
     expect(round.isBettingComplete()).toBe(true);
   });
 });
+
+describe('Round - 有効なアクション判定（getValidActions）', () => {
+  let players: Player[];
+
+  beforeEach(() => {
+    players = [
+      { id: 'p1', name: 'Alice', chips: 1000, seat: 0, connected: true, lastSeen: Date.now() },
+      { id: 'p2', name: 'Bob', chips: 1000, seat: 1, connected: true, lastSeen: Date.now() },
+      { id: 'p3', name: 'Charlie', chips: 1000, seat: 2, connected: true, lastSeen: Date.now() },
+    ];
+  });
+
+  test('プリフロップ最初のプレイヤー（UTG）はfold, call, raise, allinが可能', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    const validActions = round.getValidActions('p1');
+    expect(validActions).toContain('fold');
+    expect(validActions).toContain('call');
+    expect(validActions).toContain('raise');
+    expect(validActions).toContain('allin');
+    expect(validActions).not.toContain('check'); // BBより少ないのでチェック不可
+  });
+
+  test('プリフロップBBはfold, check, raise, allinが可能（全員コール後）', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    round.executeAction('p1', 'call');
+    round.executeAction('p2', 'call');
+
+    const validActions = round.getValidActions('p3');
+    expect(validActions).toContain('fold');
+    expect(validActions).toContain('check'); // 既にBB払っているのでチェック可能
+    expect(validActions).toContain('raise');
+    expect(validActions).toContain('allin');
+    expect(validActions).not.toContain('call'); // 既にベット額が揃っているのでコール不要
+  });
+
+  test('フロップ最初のプレイヤーはfold, check, raise, allinが可能', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    round.executeAction('p1', 'call');
+    round.executeAction('p2', 'call');
+    round.executeAction('p3', 'check');
+    round.advanceRound();
+
+    const validActions = round.getValidActions('p2');
+    expect(validActions).toContain('fold');
+    expect(validActions).toContain('check'); // ベットがないのでチェック可能
+    expect(validActions).toContain('raise');
+    expect(validActions).toContain('allin');
+    expect(validActions).not.toContain('call'); // ベットがないのでコール不要
+  });
+
+  test('レイズ後のプレイヤーはfold, call, raise, allinが可能', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    round.executeAction('p1', 'call');
+    round.executeAction('p2', 'call');
+    round.executeAction('p3', 'check');
+    round.advanceRound();
+
+    round.executeAction('p2', 'raise', 50);
+
+    const validActions = round.getValidActions('p3');
+    expect(validActions).toContain('fold');
+    expect(validActions).toContain('call');
+    expect(validActions).toContain('raise');
+    expect(validActions).toContain('allin');
+    expect(validActions).not.toContain('check'); // レイズされているのでチェック不可
+  });
+
+  test('チップ不足でレイズ不可', () => {
+    const lowChipPlayers: Player[] = [
+      { id: 'p1', name: 'Alice', chips: 30, seat: 0, connected: true, lastSeen: Date.now() },
+      { id: 'p2', name: 'Bob', chips: 1000, seat: 1, connected: true, lastSeen: Date.now() },
+      { id: 'p3', name: 'Charlie', chips: 1000, seat: 2, connected: true, lastSeen: Date.now() },
+    ];
+
+    const round = new Round(lowChipPlayers, 0, 10, 20);
+    round.start();
+
+    const validActions = round.getValidActions('p1');
+    expect(validActions).toContain('fold');
+    expect(validActions).toContain('call');
+    expect(validActions).toContain('allin');
+    expect(validActions).not.toContain('raise'); // チップ不足でレイズ不可
+  });
+
+  test('ターンでないプレイヤーは何もできない', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    const validActions = round.getValidActions('p2'); // p1のターン
+    expect(validActions).toEqual([]);
+  });
+
+  test('フォールド済みプレイヤーは何もできない', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    round.executeAction('p1', 'fold');
+
+    const validActions = round.getValidActions('p1');
+    expect(validActions).toEqual([]);
+  });
+
+  test('オールイン済みプレイヤーは何もできない', () => {
+    const round = new Round(players, 0, 10, 20);
+    round.start();
+
+    round.executeAction('p1', 'allin');
+    // p1のチップは0になる
+
+    const validActions = round.getValidActions('p1');
+    expect(validActions).toEqual([]);
+  });
+});

@@ -120,10 +120,12 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
         }
 
         // 最初のプレイヤーにターン通知
+        const currentBettorId = round.getCurrentBettorId();
         io.to(data.roomId).emit('turnNotification', {
-          playerId: round.getCurrentBettorId(),
-          currentBet: round.getPlayerBet(round.getCurrentBettorId()),
+          playerId: currentBettorId,
+          currentBet: round.getPlayerBet(currentBettorId),
           playerBets: round.getAllPlayerBets(),
+          validActions: round.getValidActions(currentBettorId),
         });
 
         console.log(`Game started in room: ${data.roomId}`);
@@ -200,18 +202,22 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
           // 次のストリートの最初のプレイヤーにターン通知
           if (!round.isComplete()) {
+            const nextBettorId = round.getCurrentBettorId();
             io.to(roomId).emit('turnNotification', {
-              playerId: round.getCurrentBettorId(),
-              currentBet: round.getPlayerBet(round.getCurrentBettorId()),
+              playerId: nextBettorId,
+              currentBet: round.getPlayerBet(nextBettorId),
               playerBets: round.getAllPlayerBets(),
+              validActions: round.getValidActions(nextBettorId),
             });
           }
         } else {
           // ベッティング継続中: 次のプレイヤーにターン通知
+          const nextBettorId = round.getCurrentBettorId();
           io.to(roomId).emit('turnNotification', {
-            playerId: round.getCurrentBettorId(),
-            currentBet: round.getPlayerBet(round.getCurrentBettorId()),
+            playerId: nextBettorId,
+            currentBet: round.getPlayerBet(nextBettorId),
             playerBets: round.getAllPlayerBets(),
+            validActions: round.getValidActions(nextBettorId),
           });
         }
 

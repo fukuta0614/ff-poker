@@ -21,6 +21,7 @@ export const Room: React.FC = () => {
     setMyHand,
     setRoundStage,
     setPlayerBets,
+    setValidActions,
   } = useGame();
 
   const [canStart, setCanStart] = useState(false);
@@ -49,10 +50,18 @@ export const Room: React.FC = () => {
     });
 
     // ターン通知
-    socket.on('turnNotification', (data: { playerId: string; currentBet: number; playerBets?: Record<string, number> }) => {
+    socket.on('turnNotification', (data: {
+      playerId: string;
+      currentBet: number;
+      playerBets?: Record<string, number>;
+      validActions?: Array<'fold' | 'check' | 'call' | 'raise' | 'allin'>;
+    }) => {
       setCurrentBettorId(data.playerId);
       if (data.playerBets) {
         setPlayerBets(data.playerBets);
+      }
+      if (data.validActions) {
+        setValidActions(data.validActions);
       }
     });
 
@@ -228,81 +237,92 @@ export const Room: React.FC = () => {
             <div style={{ marginBottom: '20px' }}>
               <h3>Your Turn</h3>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => handleAction('fold')}
-                  style={{
-                    padding: '10px 20px',
-                    backgroundColor: '#f44336',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Fold
-                </button>
-                <button
-                  onClick={() => handleAction('check')}
-                  style={{
-                    padding: '10px 20px',
-                    backgroundColor: '#2196F3',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Check
-                </button>
-                <button
-                  onClick={() => handleAction('call')}
-                  style={{
-                    padding: '10px 20px',
-                    backgroundColor: '#4CAF50',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Call
-                </button>
-                <div style={{ display: 'flex', gap: '5px' }}>
-                  <input
-                    type="number"
-                    value={raiseAmount}
-                    onChange={(e) => setRaiseAmount(e.target.value)}
-                    placeholder="Amount"
-                    style={{ padding: '10px', width: '100px' }}
-                  />
+                {gameState.validActions.includes('fold') && (
                   <button
-                    onClick={() => handleAction('raise', parseInt(raiseAmount))}
-                    disabled={!raiseAmount}
+                    onClick={() => handleAction('fold')}
                     style={{
                       padding: '10px 20px',
-                      backgroundColor: '#FF9800',
+                      backgroundColor: '#f44336',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
                       cursor: 'pointer',
                     }}
                   >
-                    Raise
+                    Fold
                   </button>
-                </div>
-                <button
-                  onClick={() => handleAction('allin')}
-                  style={{
-                    padding: '10px 20px',
-                    backgroundColor: '#9C27B0',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
-                >
-                  All-In
-                </button>
+                )}
+                {gameState.validActions.includes('check') && (
+                  <button
+                    onClick={() => handleAction('check')}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#2196F3',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Check
+                  </button>
+                )}
+                {gameState.validActions.includes('call') && (
+                  <button
+                    onClick={() => handleAction('call')}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#4CAF50',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Call
+                  </button>
+                )}
+                {gameState.validActions.includes('raise') && (
+                  <div style={{ display: 'flex', gap: '5px' }}>
+                    <input
+                      type="number"
+                      value={raiseAmount}
+                      onChange={(e) => setRaiseAmount(e.target.value)}
+                      placeholder="Amount"
+                      style={{ padding: '10px', width: '100px' }}
+                    />
+                    <button
+                      onClick={() => handleAction('raise', parseInt(raiseAmount))}
+                      disabled={!raiseAmount}
+                      style={{
+                        padding: '10px 20px',
+                        backgroundColor: '#FF9800',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: raiseAmount ? 'pointer' : 'not-allowed',
+                        opacity: raiseAmount ? 1 : 0.5,
+                      }}
+                    >
+                      Raise
+                    </button>
+                  </div>
+                )}
+                {gameState.validActions.includes('allin') && (
+                  <button
+                    onClick={() => handleAction('allin')}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#9C27B0',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    All-In
+                  </button>
+                )}
               </div>
             </div>
           )}
