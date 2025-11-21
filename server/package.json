@@ -16,7 +16,11 @@
     "lint": "eslint 'src/**/*.ts'",
     "format": "prettier --write 'src/**/*.ts'"
   },
-  "keywords": ["poker", "game", "websocket"],
+  "keywords": [
+    "poker",
+    "game",
+    "websocket"
+  ],
   "author": "",
   "license": "MIT",
   "type": "commonjs",
@@ -26,7 +30,7 @@
     "express": "^5.1.0",
     "pokersolver": "^2.1.4",
     "socket.io": "^4.8.1",
-    "uuid": "^13.0.0"
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

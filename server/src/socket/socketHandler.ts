@@ -121,6 +121,9 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
         // 最初のプレイヤーにターン通知
         const currentBettorId = round.getCurrentBettorId();
+        console.log(`[DEBUG] Game started - room players:`, room.players.map(p => ({ id: p.id, name: p.name })));
+        console.log(`[DEBUG] Game started - current bettor: ${currentBettorId}`);
+
         io.to(data.roomId).emit('turnNotification', {
           playerId: currentBettorId,
           currentBet: round.getPlayerBet(currentBettorId),
