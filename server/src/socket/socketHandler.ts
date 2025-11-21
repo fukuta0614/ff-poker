@@ -197,15 +197,21 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
             state: round.getState(),
             communityCards: round.getCommunityCards(),
           });
-        }
 
-        // 次のプレイヤーにターン通知
-        const activeRound = gameManager.getActiveRound(roomId);
-        if (activeRound && !activeRound.isComplete()) {
+          // 次のストリートの最初のプレイヤーにターン通知
+          if (!round.isComplete()) {
+            io.to(roomId).emit('turnNotification', {
+              playerId: round.getCurrentBettorId(),
+              currentBet: round.getPlayerBet(round.getCurrentBettorId()),
+              playerBets: round.getAllPlayerBets(),
+            });
+          }
+        } else {
+          // ベッティング継続中: 次のプレイヤーにターン通知
           io.to(roomId).emit('turnNotification', {
-            playerId: activeRound.getCurrentBettorId(),
-            currentBet: activeRound.getPlayerBet(activeRound.getCurrentBettorId()),
-            playerBets: activeRound.getAllPlayerBets(),
+            playerId: round.getCurrentBettorId(),
+            currentBet: round.getPlayerBet(round.getCurrentBettorId()),
+            playerBets: round.getAllPlayerBets(),
           });
         }
 
