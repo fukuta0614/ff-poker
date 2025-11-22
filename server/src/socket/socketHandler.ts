@@ -4,6 +4,9 @@
 
 import { Server, Socket } from 'socket.io';
 import { GameManager } from '../game/GameManager';
+import { SessionManager } from '../services/SessionManager';
+import { TurnTimerManager } from '../services/TurnTimerManager';
+import { LoggerService } from '../services/LoggerService';
 import {
   JoinRoomData,
   StartGameData,
@@ -11,9 +14,15 @@ import {
   ChatMessageData,
 } from '../types/socket';
 
-export const setupSocketHandlers = (io: Server, gameManager: GameManager): void => {
+export const setupSocketHandlers = (
+  io: Server,
+  gameManager: GameManager,
+  sessionManager: SessionManager,
+  turnTimerManager: TurnTimerManager,
+  logger: LoggerService
+): void => {
   io.on('connection', (socket: Socket) => {
-    console.log(`Client connected: ${socket.id}`);
+    logger.logConnection(socket.id, undefined, undefined, true);
 
     // ルーム作成（簡易版）
     socket.on('createRoom', (data: { hostName: string; smallBlind: number; bigBlind: number }) => {
@@ -25,7 +34,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           hostId: room.hostId,
         });
 
-        console.log(`Room created: ${room.id}`);
+        logger.info('Room created', { roomId: room.id });
       } catch (error) {
         socket.emit('error', { message: 'Failed to create room', code: 'CREATE_ROOM_ERROR' });
       }
@@ -70,7 +79,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           chips: player.chips,
         });
 
-        console.log(`${data.playerName} joined room: ${data.roomId}`);
+        logger.info('Player joined room', { playerName: data.playerName, roomId: data.roomId, playerId: player.id });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to join room';
         socket.emit('error', { message, code: 'JOIN_ROOM_ERROR' });
@@ -121,8 +130,11 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
         // 最初のプレイヤーにターン通知
         const currentBettorId = round.getCurrentBettorId();
-        console.log(`[DEBUG] Game started - room players:`, room.players.map(p => ({ id: p.id, name: p.name })));
-        console.log(`[DEBUG] Game started - current bettor: ${currentBettorId}`);
+        logger.debug('Game started', {
+          roomId: data.roomId,
+          players: room.players.map(p => ({ id: p.id, name: p.name })),
+          currentBettorId,
+        });
 
         io.to(data.roomId).emit('turnNotification', {
           playerId: currentBettorId,
@@ -131,7 +143,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           validActions: round.getValidActions(currentBettorId),
         });
 
-        console.log(`Game started in room: ${data.roomId}`);
+        logger.info('Game started in room', { roomId: data.roomId });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to start game';
         socket.emit('error', { message, code: 'START_GAME_ERROR' });
@@ -144,7 +156,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
         const { playerId, action } = data;
         const roomId = (socket as any).roomId;
 
-        console.log(`[DEBUG] action received - playerId: ${playerId}, action: ${action.type}, amount: ${action.amount}`);
+        logger.debug('Action received', { playerId, action: action.type, amount: action.amount });
 
         if (!roomId) {
           socket.emit('error', { message: 'Not in a room', code: 'NOT_IN_ROOM' });
@@ -157,9 +169,12 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           return;
         }
 
-        console.log(`[DEBUG] Before action - currentBettorId: ${round.getCurrentBettorId()}`);
-        console.log(`[DEBUG] Before action - isBettingComplete: ${round.isBettingComplete()}`);
-        console.log(`[DEBUG] Before action - isComplete: ${round.isComplete()}`);
+        logger.debug('Before action', {
+          roomId,
+          currentBettorId: round.getCurrentBettorId(),
+          isBettingComplete: round.isBettingComplete(),
+          isComplete: round.isComplete(),
+        });
 
         // アクション実行 ('bet'は'raise'として扱う)
         const actionType = action.type === 'bet' ? 'raise' : action.type;
@@ -170,16 +185,19 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           // アクションエラーを個別に処理
           const message = actionError instanceof Error ? actionError.message : 'Invalid action';
           socket.emit('error', { message, code: 'ACTION_ERROR' });
-          console.error(`[ERROR] Action error from ${playerId}: ${message}`);
+          logger.error('Action error', undefined, { playerId, message });
           return;
         }
 
         const room = gameManager.getRoom(roomId);
         if (!room) return;
 
-        console.log(`[DEBUG] After action - currentBettorId: ${round.getCurrentBettorId()}`);
-        console.log(`[DEBUG] After action - isBettingComplete: ${round.isBettingComplete()}`);
-        console.log(`[DEBUG] After action - isComplete: ${round.isComplete()}`);
+        logger.debug('After action', {
+          roomId,
+          currentBettorId: round.getCurrentBettorId(),
+          isBettingComplete: round.isBettingComplete(),
+          isComplete: round.isComplete(),
+        });
 
         // 全プレイヤーにアクション通知
         io.to(roomId).emit('actionPerformed', {
@@ -192,7 +210,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
         // ラウンドの状態に応じて通知
         if (round.isComplete()) {
-          console.log(`[DEBUG] Round complete - performing showdown`);
+          logger.debug('Round complete - performing showdown', { roomId });
           // ショーダウン実行
           round.performShowdown();
 
@@ -205,11 +223,11 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
             })),
           });
         } else if (round.isBettingComplete()) {
-          console.log(`[DEBUG] Betting complete - advancing to next street`);
+          logger.debug('Betting complete - advancing to next street', { roomId });
           // 次のストリートへ進む（重要！）
           round.advanceRound();
 
-          console.log(`[DEBUG] New street: ${round.getState()}`);
+          logger.debug('New street', { roomId, state: round.getState() });
 
           // 新しいストリート情報を通知
           io.to(roomId).emit('newStreet', {
@@ -220,7 +238,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           // 次のストリートの最初のプレイヤーにターン通知
           if (!round.isComplete()) {
             const nextBettorId = round.getCurrentBettorId();
-            console.log(`[DEBUG] Emitting turnNotification to: ${nextBettorId}`);
+            logger.debug('Emitting turnNotification', { roomId, playerId: nextBettorId });
             io.to(roomId).emit('turnNotification', {
               playerId: nextBettorId,
               currentBet: round.getPlayerBet(nextBettorId),
@@ -229,10 +247,10 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
             });
           }
         } else {
-          console.log(`[DEBUG] Betting continues - notifying next player`);
+          logger.debug('Betting continues - notifying next player', { roomId });
           // ベッティング継続中: 次のプレイヤーにターン通知
           const nextBettorId = round.getCurrentBettorId();
-          console.log(`[DEBUG] Emitting turnNotification to: ${nextBettorId}`);
+          logger.debug('Emitting turnNotification', { roomId, playerId: nextBettorId });
           io.to(roomId).emit('turnNotification', {
             playerId: nextBettorId,
             currentBet: round.getPlayerBet(nextBettorId),
@@ -241,11 +259,11 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           });
         }
 
-        console.log(`[INFO] Action completed - ${playerId}: ${action.type}`);
+        logger.info('Action completed', { roomId, playerId, action: action.type });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to execute action';
         socket.emit('error', { message, code: 'ACTION_ERROR' });
-        console.error(`[ERROR] Unexpected error: ${message}`);
+        logger.error('Unexpected error', error instanceof Error ? error : undefined, { message });
       }
     });
 
@@ -260,7 +278,18 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
     // 切断
     socket.on('disconnect', () => {
-      console.log(`Client disconnected: ${socket.id}`);
+      const playerId = (socket as any).playerId;
+      const roomId = (socket as any).roomId;
+      
+      logger.logConnection(socket.id, playerId, undefined, false);
+      
+      if (playerId) {
+        // セッション更新（lastSeen更新）
+        sessionManager.updateSession(playerId, socket.id);
+        
+        // TODO: グレースピリオド開始、playerDisconnected イベント送信
+        // TODO: 120秒後に自動フォールド処理
+      }
     });
   });
 };

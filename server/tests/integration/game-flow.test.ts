@@ -7,11 +7,17 @@ import { Server as SocketIOServer } from 'socket.io';
 import { io as ioClient, Socket as ClientSocket } from 'socket.io-client';
 import { GameManager } from '../../src/game/GameManager';
 import { setupSocketHandlers } from '../../src/socket/socketHandler';
+import { SessionManager } from '../../src/services/SessionManager';
+import { TurnTimerManager } from '../../src/services/TurnTimerManager';
+import { LoggerService } from '../../src/services/LoggerService';
 
 describe('Game Flow Integration Test', () => {
   let io: SocketIOServer;
   let httpServer: any;
   let gameManager: GameManager;
+  let sessionManager: SessionManager;
+  let turnTimerManager: TurnTimerManager;
+  let logger: LoggerService;
   let clientSocket1: ClientSocket;
   let clientSocket2: ClientSocket;
   let clientSocket3: ClientSocket;
@@ -29,11 +35,14 @@ describe('Game Flow Integration Test', () => {
       },
     });
 
-    // GameManager初期化
+    // サービス初期化
     gameManager = new GameManager();
+    sessionManager = new SessionManager();
+    turnTimerManager = new TurnTimerManager();
+    logger = new LoggerService();
 
     // ハンドラセットアップ
-    setupSocketHandlers(io, gameManager);
+    setupSocketHandlers(io, gameManager, sessionManager, turnTimerManager, logger);
 
     // サーバー起動
     httpServer.listen(PORT, () => {
