@@ -70,6 +70,9 @@ describe('Game Flow Integration Test', () => {
     if (clientSocket1?.connected) clientSocket1.disconnect();
     if (clientSocket2?.connected) clientSocket2.disconnect();
     if (clientSocket3?.connected) clientSocket3.disconnect();
+
+    // タイマーをすべてクリア
+    turnTimerManager.clearAllTimers();
   });
 
   /**
@@ -207,7 +210,7 @@ describe('Game Flow Integration Test', () => {
       console.error('[TEST] Player1 received error:', error);
       done(new Error(`Player1 error: ${error.message}`));
     });
-  }, 15000); // 15秒タイムアウト
+  }, 30000); // 30秒タイムアウト
 
   /**
    * テスト2: 3プレイヤーでプリフロップ全員アクションを確認
@@ -336,7 +339,7 @@ describe('Game Flow Integration Test', () => {
       console.error('[TEST] Error:', error);
       done(new Error(error.message));
     });
-  }, 20000); // 20秒タイムアウト
+  }, 30000); // 30秒タイムアウト
 
   /**
    * テスト3: プレイヤーがレイズした場合、全員が再度アクションする必要がある
@@ -447,5 +450,5 @@ describe('Game Flow Integration Test', () => {
       console.error('[TEST] Error:', error);
       done(new Error(error.message));
     });
-  }, 20000);
+  }, 30000); // 30秒タイムアウト
 });

@@ -55,6 +55,9 @@ export const setupSocketHandlers = (
         // socketをルームに参加させる
         socket.join(data.roomId);
 
+        // セッション作成
+        sessionManager.createSession(player.id, socket.id);
+
         // プレイヤーIDを保存
         (socket as any).playerId = player.id;
         (socket as any).roomId = data.roomId;
@@ -318,15 +321,17 @@ export const setupSocketHandlers = (
     socket.on('disconnect', () => {
       const playerId = (socket as any).playerId;
       const roomId = (socket as any).roomId;
-      
+
       logger.logConnection(socket.id, playerId, undefined, false);
 
       if (playerId) {
-        // セッション更新（lastSeen更新）
-        sessionManager.updateSession(playerId, socket.id);
+        // lastSeen更新のみ（socketIdは更新しない）
+        const session = sessionManager.getSession(playerId);
+        if (session) {
+          session.lastSeen = Date.now();
+        }
 
         // Emit playerDisconnected to room
-        // const roomId = (socket as any).roomId; // roomId is already defined above
         if (roomId) {
           io.to(roomId).emit('playerDisconnected', { playerId });
         }
@@ -336,10 +341,10 @@ export const setupSocketHandlers = (
           if (!sessionManager.isSessionValid(playerId)) {
             // Session expired, auto-fold
             try {
-              // const roomId = (socket as any).roomId; // roomId is already defined above
               if (roomId) {
                 gameManager.executePlayerAction(roomId, playerId, 'fold');
                 io.to(roomId).emit('playerAutoFolded', { playerId });
+                logger.info('Player auto-folded after grace period', { playerId, roomId });
               }
             } catch (e) {
               logger.error('Auto-fold error on disconnect', e instanceof Error ? e : undefined, { playerId });
@@ -349,18 +354,52 @@ export const setupSocketHandlers = (
       }
     });
     // Reconnection handler
-    socket.on('reconnectRequest', (data: { playerId: string }) => {
-      const { playerId } = data;
-      const success = sessionManager.reconnect(playerId, socket.id);
-      if (success) {
-        const roomId = (socket as any).roomId;
-        if (roomId) {
+    socket.on('reconnectRequest', (data: { playerId: string; roomId: string }) => {
+      try {
+        const { playerId, roomId } = data;
+        const success = sessionManager.reconnect(playerId, socket.id);
+
+        if (success) {
+          // Socket情報を復元
+          (socket as any).playerId = playerId;
+          (socket as any).roomId = roomId;
           socket.join(roomId);
+
+          // 再接続成功を通知
           io.to(roomId).emit('playerReconnected', { playerId });
-          // Optionally send current game state here
+          logger.info('Player reconnected', { playerId, roomId });
+
+          // 現在のゲーム状態を送信
+          const room = gameManager.getRoom(roomId);
+          const round = gameManager.getActiveRound(roomId);
+
+          if (room && round) {
+            socket.emit('gameState', {
+              roomId,
+              players: room.players.map((p) => ({
+                id: p.id,
+                name: p.name,
+                chips: p.chips,
+                seat: p.seat,
+              })),
+              communityCards: round.getCommunityCards(),
+              pot: round.getPot(),
+              currentBettorId: round.getCurrentBettorId(),
+              playerBets: round.getAllPlayerBets(),
+              hand: round.getPlayerHand(playerId),
+            });
+          }
+        } else {
+          socket.emit('error', {
+            message: 'Reconnection failed - grace period expired',
+            code: 'RECONNECT_FAILED',
+          });
+          logger.warn('Reconnection failed', { playerId, roomId });
         }
-      } else {
-        socket.emit('error', { message: 'Reconnection failed', code: 'RECONNECT_FAILED' });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Reconnection error';
+        socket.emit('error', { message, code: 'RECONNECT_FAILED' });
+        logger.error('Reconnection error', error instanceof Error ? error : undefined);
       }
     });
   });
