@@ -79,7 +79,6 @@ export const Room: React.FC = () => {
         setPlayerBets(data.playerBets);
       }
     });
-
     // 新しいストリート
     socket.on('newStreet', (data: {
       state: string;

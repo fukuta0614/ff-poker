@@ -29,6 +29,7 @@ export class Round {
   private hasActed: Set<string>; // アクション済みプレイヤー
   private lastAggressorId: string | null; // 最後にベット/レイズしたプレイヤー
   private minRaiseAmount: number; // 最小レイズ額
+  private bigBlindPlayerId: string; // BBプレイヤーのID（プリフロップ用）
 
   constructor(
     players: Player[],
@@ -61,6 +62,10 @@ export class Round {
     } else {
       this.currentBettor = this.getNextPlayerIndex(this.getBigBlindIndex());
     }
+
+    // BBプレイヤーのIDを保存（プリフロップ用）
+    const bbIndex = this.getBigBlindIndex();
+    this.bigBlindPlayerId = players[bbIndex].id;
   }
 
   /**
@@ -385,8 +390,20 @@ export class Round {
       return true;
     }
 
+    // プリフロップの特殊ケース: BBがアクションする権利を持つ
+    if (this.stage === 'preflop' && !this.folded.has(this.bigBlindPlayerId)) {
+      // BBがまだアクションしていない場合、ベッティングは未完了
+      if (!this.hasActed.has(this.bigBlindPlayerId)) {
+        console.log(`[DEBUG] isBettingComplete: false (Preflop - BB has not acted yet)`);
+        return false;
+      }
+    }
+
     // 全員がアクション済みかつベット額が揃っている
-    return this.hasEveryoneActed() && this.areBetsSettled();
+    const acted = this.hasEveryoneActed();
+    const settled = this.areBetsSettled();
+    console.log(`[DEBUG] isBettingComplete: ${acted && settled} (Acted: ${acted}, Settled: ${settled})`);
+    return acted && settled;
   }
 
   /**

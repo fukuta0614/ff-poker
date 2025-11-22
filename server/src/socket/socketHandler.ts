@@ -15,14 +15,24 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
   io.on('connection', (socket: Socket) => {
     console.log(`Client connected: ${socket.id}`);
 
-    // ルーム作成（簡易版）
+    // ルーム作成
     socket.on('createRoom', (data: { hostName: string; smallBlind: number; bigBlind: number }) => {
       try {
-        const room = gameManager.createRoom(data.hostName, data.smallBlind, data.bigBlind);
+        const { room, host } = gameManager.createRoom(data.hostName, data.smallBlind, data.bigBlind);
+
+        // ソケットをルームに参加させる
+        socket.join(room.id);
+
+        // プレイヤーIDとルームIDを保存
+        (socket as any).playerId = host.id;
+        (socket as any).roomId = room.id;
 
         socket.emit('roomCreated', {
           roomId: room.id,
-          hostId: room.hostId,
+          playerId: host.id, // hostIdではなくplayerIdを返す
+          playerName: host.name,
+          seat: host.seat,
+          chips: host.chips,
         });
 
         console.log(`Room created: ${room.id}`);
@@ -124,12 +134,18 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
         console.log(`[DEBUG] Game started - room players:`, room.players.map(p => ({ id: p.id, name: p.name })));
         console.log(`[DEBUG] Game started - current bettor: ${currentBettorId}`);
 
-        io.to(data.roomId).emit('turnNotification', {
-          playerId: currentBettorId,
-          currentBet: round.getPlayerBet(currentBettorId),
-          playerBets: round.getAllPlayerBets(),
-          validActions: round.getValidActions(currentBettorId),
-        });
+        // Delay emission to ensure client listeners are attached
+        setTimeout(() => {
+          io.to(data.roomId).emit('turnNotification', {
+            playerId: currentBettorId,
+            currentBet: round.getPlayerBet(currentBettorId),
+            playerBets: round.getAllPlayerBets(),
+            validActions: round.getValidActions(currentBettorId),
+          });
+
+          console.log(`[DEBUG] Sent turnNotification to room ${data.roomId} for player ${currentBettorId}`);
+          console.log(`[DEBUG] Valid actions:`, round.getValidActions(currentBettorId));
+        }, 0);
 
         console.log(`Game started in room: ${data.roomId}`);
       } catch (error) {

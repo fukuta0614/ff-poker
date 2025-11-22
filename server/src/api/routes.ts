@@ -18,11 +18,11 @@ export const createRoutes = (gameManager: GameManager): Router => {
         return;
       }
 
-      const room = gameManager.createRoom(hostName, smallBlind, bigBlind);
+      const { room, host } = gameManager.createRoom(hostName, smallBlind, bigBlind);
 
       res.json({
         roomId: room.id,
-        hostId: room.hostId,
+        hostId: host.id,
       });
     } catch (error) {
       console.error('Error creating room:', error);

@@ -85,20 +85,10 @@ describe('Game Flow Integration Test', () => {
       });
     });
 
-    clientSocket1.on('roomCreated', (data: { roomId: string; hostId: string }) => {
+    clientSocket1.on('roomCreated', (data: { roomId: string; playerId: string }) => {
       console.log('[TEST] Room created:', data.roomId);
       roomId = data.roomId;
-
-      // プレイヤー1がルームに参加
-      clientSocket1.emit('joinRoom', {
-        roomId: roomId,
-        playerName: 'Player1',
-      });
-    });
-
-    clientSocket1.on('joinedRoom', (data: any) => {
-      console.log('[TEST] Player1 joined room:', data);
-      player1Id = data.playerId; // 修正: joinedRoomのplayerIdを使用
+      player1Id = data.playerId; // ホストはすでにプレイヤーとして追加済み
 
       // プレイヤー2接続
       clientSocket2 = ioClient(`http://localhost:${PORT}`);
@@ -223,19 +213,10 @@ describe('Game Flow Integration Test', () => {
       });
     });
 
-    clientSocket1.on('roomCreated', (data: { roomId: string; hostId: string }) => {
+    clientSocket1.on('roomCreated', (data: { roomId: string; playerId: string }) => {
       console.log('[TEST] Room created:', data.roomId);
       roomId = data.roomId;
-
-      clientSocket1.emit('joinRoom', {
-        roomId: roomId,
-        playerName: 'Player1',
-      });
-    });
-
-    clientSocket1.on('joinedRoom', (data: any) => {
-      console.log('[TEST] Player1 joined room');
-      player1Id = data.playerId; // 修正: joinedRoomのplayerIdを使用
+      player1Id = data.playerId; // ホストはすでにプレイヤーとして追加済み
 
       // プレイヤー2接続
       clientSocket2 = ioClient(`http://localhost:${PORT}`);
@@ -349,17 +330,10 @@ describe('Game Flow Integration Test', () => {
       });
     });
 
-    clientSocket1.on('roomCreated', (data: { roomId: string; hostId: string }) => {
+    clientSocket1.on('roomCreated', (data: { roomId: string; playerId: string }) => {
       roomId = data.roomId;
+      player1Id = data.playerId; // ホストはすでにプレイヤーとして追加済み
 
-      clientSocket1.emit('joinRoom', {
-        roomId: roomId,
-        playerName: 'Player1',
-      });
-    });
-
-    clientSocket1.on('joinedRoom', (data: any) => {
-      player1Id = data.playerId; // 修正: joinedRoomのplayerIdを使用
       clientSocket2 = ioClient(`http://localhost:${PORT}`);
       clientSocket2.on('connect', () => {
         clientSocket2.emit('joinRoom', {
