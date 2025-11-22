@@ -6,17 +6,7 @@
 
 このプロジェクトでは nvm (Node Version Manager) を使用しています。
 
-**使用しているnpm PATH**:
-```
-/Users/fukuta0614/.nvm/versions/node/v23.10.0/bin/npm
-```
-
-**コマンド実行時は以下のようにPATHを設定**:
-```bash
-export PATH="/Users/fukuta0614/.nvm/versions/node/v23.10.0/bin:$PATH"
-npm install
-npm test
-```
+**使用しているNode.jsバージョン**: v23.10.0
 
 ### 依存関係の問題と解決
 
@@ -39,7 +29,6 @@ npm install uuid@9
 ### 実行方法
 ```bash
 cd server
-export PATH="/Users/fukuta0614/.nvm/versions/node/v23.10.0/bin:$PATH"
 npm test tests/integration/
 ```
 
