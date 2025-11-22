@@ -34,22 +34,21 @@ export const Lobby: React.FC = () => {
       bigBlind: 20,
     });
 
-    socket.once('roomCreated', (data: { roomId: string; hostId: string }) => {
+    socket.once('roomCreated', (data: { roomId: string; playerId: string; playerName: string; seat: number; chips: number }) => {
       console.log('Room created:', data);
       setRoomId(data.roomId);
-      setPlayerId(data.hostId);
+      setPlayerId(data.playerId); // hostIdではなくplayerIdを使用
 
-      // ホストとして自動参加
-      socket.emit('joinRoom', {
-        roomId: data.roomId,
-        playerName,
-      });
+      // ホストはすでにプレイヤーとして追加されているので、プレイヤーリストを更新
+      setPlayers([{
+        id: data.playerId,
+        name: data.playerName,
+        seat: data.seat,
+        chips: data.chips,
+      }]);
 
-      socket.once('joinedRoom', (joinData: { roomId: string; playerId: string; players: Player[] }) => {
-        setPlayers(joinData.players);
-        setLoading(false);
-        navigate(`/room/${data.roomId}`);
-      });
+      setLoading(false);
+      navigate(`/room/${data.roomId}`);
     });
 
     socket.once('error', (err: { message: string }) => {

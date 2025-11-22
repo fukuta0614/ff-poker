@@ -25,14 +25,27 @@ export const setupSocketHandlers = (
   io.on('connection', (socket: Socket) => {
     logger.logConnection(socket.id, undefined, undefined, true);
 
-    // ルーム作成（簡易版）
+    // ルーム作成
     socket.on('createRoom', (data: { hostName: string; smallBlind: number; bigBlind: number }) => {
       try {
-        const room = gameManager.createRoom(data.hostName, data.smallBlind, data.bigBlind);
+        const { room, host } = gameManager.createRoom(data.hostName, data.smallBlind, data.bigBlind);
+
+        // ソケットをルームに参加させる
+        socket.join(room.id);
+
+        // セッション作成
+        sessionManager.createSession(host.id, socket.id);
+
+        // プレイヤーIDとルームIDを保存
+        (socket as any).playerId = host.id;
+        (socket as any).roomId = room.id;
 
         socket.emit('roomCreated', {
           roomId: room.id,
-          hostId: room.hostId,
+          playerId: host.id, // hostIdではなくplayerIdを返す
+          playerName: host.name,
+          seat: host.seat,
+          chips: host.chips,
         });
 
         logger.info('Room created', { roomId: room.id });
@@ -140,12 +153,18 @@ export const setupSocketHandlers = (
           currentBettorId,
         });
 
-        io.to(data.roomId).emit('turnNotification', {
-          playerId: currentBettorId,
-          currentBet: round.getPlayerBet(currentBettorId),
-          playerBets: round.getAllPlayerBets(),
-          validActions: round.getValidActions(currentBettorId),
-        });
+        // Delay emission to ensure client listeners are attached
+        setTimeout(() => {
+          io.to(data.roomId).emit('turnNotification', {
+            playerId: currentBettorId,
+            currentBet: round.getPlayerBet(currentBettorId),
+            playerBets: round.getAllPlayerBets(),
+            validActions: round.getValidActions(currentBettorId),
+          });
+
+          logger.debug('Sent turnNotification', { roomId: data.roomId, playerId: currentBettorId });
+        }, 0);
+
         // Start turn timer
         turnTimerManager.startTimer(data.roomId, currentBettorId, () => {
           // Auto-fold on timeout

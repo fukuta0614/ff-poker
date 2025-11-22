@@ -22,16 +22,26 @@ export class GameManager {
    * @param hostName ホストプレイヤー名
    * @param smallBlind スモールブラインド額
    * @param bigBlind ビッグブラインド額
-   * @returns 作成されたルーム
+   * @returns 作成されたルームとホストプレイヤー情報
    */
-  public createRoom(hostName: string, smallBlind: number, bigBlind: number): Room {
+  public createRoom(hostName: string, smallBlind: number, bigBlind: number): { room: Room; host: Player } {
     const roomId = uuidv4().slice(0, 8); // 短いID
     const hostId = uuidv4();
+
+    // ホストプレイヤーを作成
+    const hostPlayer: Player = {
+      id: hostId,
+      name: hostName,
+      chips: DEFAULT_BUY_IN,
+      seat: 0,
+      connected: true,
+      lastSeen: Date.now(),
+    };
 
     const room: Room = {
       id: roomId,
       hostId,
-      players: [],
+      players: [hostPlayer], // ホストを最初のプレイヤーとして追加
       state: 'waiting',
       dealerIndex: 0,
       smallBlind,
@@ -41,9 +51,9 @@ export class GameManager {
     };
 
     this.rooms.set(roomId, room);
-    console.log(`Room created: ${roomId} by ${hostName}`);
+    console.log(`Room created: ${roomId} by ${hostName} (Player ID: ${hostId})`);
 
-    return room;
+    return { room, host: hostPlayer };
   }
 
   /**
@@ -180,21 +190,8 @@ export class GameManager {
 
     round.executeAction(playerId, action, amount);
 
-    // ベッティングラウンド完了チェック
-    if (round.isBettingComplete()) {
-      if (round.getState() === 'river') {
-        // ショーダウンへ
-        round.advanceRound();
-        const winnings = round.performShowdown();
-        console.log('Showdown results:', winnings);
-
-        // ラウンド終了処理
-        this.endRound(roomId);
-      } else {
-        // 次のストリートへ
-        round.advanceRound();
-      }
-    }
+    // NOTE: ベッティングラウンド完了とストリート進行の制御はsocketHandlerで行う
+    // GameManagerはアクション実行のみに専念
   }
 
   /**

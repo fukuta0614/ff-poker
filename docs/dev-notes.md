@@ -122,12 +122,64 @@ playerBets: {
 1. ブラインドの割り当てロジック（`start()`メソッド）
 2. 最初のベッター判定ロジック（`getCurrentBettorId()`メソッド）
 
-### 次のステップ
+### 修正内容（2025-11-22）
 
-1. Round.tsの `start()` メソッドでブラインド徴収ロジックを確認
-2. `getCurrentBettorId()` で2人プレイヤー時の最初のベッター判定を修正
-3. 統合テストを再実行して動作確認
-4. ユニットテストにも2人プレイヤーケースを追加
+#### 1. Round.ts の2人プレイヤー時のブラインド割り当て修正
+
+**修正箇所**: `getSmallBlindIndex()` と `getBigBlindIndex()`
+
+```typescript
+private getSmallBlindIndex(): number {
+  // 2人プレイヤーの場合: ディーラー = Small Blind
+  if (this.players.length === 2) {
+    return this.dealerIndex;
+  }
+  // 3人以上: ディーラーの次 = Small Blind
+  return (this.dealerIndex + 1) % this.players.length;
+}
+
+private getBigBlindIndex(): number {
+  // 2人プレイヤーの場合: ディーラーの次（対面）= Big Blind
+  if (this.players.length === 2) {
+    return (this.dealerIndex + 1) % this.players.length;
+  }
+  // 3人以上: ディーラーの次の次 = Big Blind
+  return (this.dealerIndex + 2) % this.players.length;
+}
+```
+
+#### 2. Round.ts の2人プレイヤー時の初期ベッター修正
+
+**修正箇所**: コンストラクタ
+
+```typescript
+// プリフロップの最初のベッターを初期化
+// 2人プレイヤー: Small Blind (ディーラー)
+// 3人以上: Big Blindの次 (UTG)
+if (players.length === 2) {
+  this.currentBettor = this.getSmallBlindIndex();
+} else {
+  this.currentBettor = this.getNextPlayerIndex(this.getBigBlindIndex());
+}
+```
+
+#### 3. GameManager.ts の重複ロジック削除
+
+**問題**: GameManagerとsocketHandlerの両方で`advanceRound()`を呼び出していたため、`hasActed`が二重にクリアされ、`isBettingComplete()`が誤判定
+
+**修正**: GameManager.executePlayerAction() から `advanceRound()` の呼び出しを削除し、socketHandlerのみで制御
+
+#### 4. 統合テストの修正
+
+- **playerIdの取得**: `roomCreated`のhostIdではなく、`joinedRoom`のplayerIdを使用
+- **3人プレイヤーのターン順序**: dealerIndex=0の場合、Player1(Dealer)=UTG, Player2=SB, Player3=BBが正しい
+
+### テスト結果
+
+統合テスト3件すべて成功:
+- ✓ 2プレイヤーでプリフロップベッティングが完了し、フロップに進む
+- ✓ 3プレイヤーでプリフロップ全員アクションが正しく実行される
+- ✓ プレイヤーがレイズした場合、全員が再度アクションする
 
 ## 参考資料
 
