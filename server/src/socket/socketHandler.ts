@@ -3,6 +3,7 @@
  */
 
 import { Server, Socket } from 'socket.io';
+import { TIMEOUT_CONSTANTS } from '../utils/constants';
 import { GameManager } from '../game/GameManager';
 import { SessionManager } from '../services/SessionManager';
 import { TurnTimerManager } from '../services/TurnTimerManager';
@@ -142,6 +143,18 @@ export const setupSocketHandlers = (
           playerBets: round.getAllPlayerBets(),
           validActions: round.getValidActions(currentBettorId),
         });
+        // Start turn timer
+        turnTimerManager.startTimer(data.roomId, currentBettorId, () => {
+          // Auto-fold on timeout
+          try {
+            gameManager.executePlayerAction(data.roomId, currentBettorId, 'fold');
+            io.to(data.roomId).emit('playerTimeout', { playerId: currentBettorId });
+          } catch (e) {
+            logger.error('Auto-fold error', e instanceof Error ? e : undefined, { playerId: currentBettorId });
+          }
+        }, (remaining, isWarning) => {
+          io.to(data.roomId).emit('timerUpdate', { playerId: currentBettorId, remaining, warning: isWarning });
+        });
 
         logger.info('Game started in room', { roomId: data.roomId });
       } catch (error) {
@@ -152,9 +165,12 @@ export const setupSocketHandlers = (
 
     // プレイヤーアクション
     socket.on('action', (data: ActionData) => {
+      const roomId = (socket as any).roomId;
+      // Cancel any existing turn timer for this room
+      turnTimerManager.cancelTimer(roomId);
       try {
         const { playerId, action } = data;
-        const roomId = (socket as any).roomId;
+        // const roomId = (socket as any).roomId; // moved above
 
         logger.debug('Action received', { playerId, action: action.type, amount: action.amount });
 
@@ -245,6 +261,17 @@ export const setupSocketHandlers = (
               playerBets: round.getAllPlayerBets(),
               validActions: round.getValidActions(nextBettorId),
             });
+            // Start turn timer for next player
+            turnTimerManager.startTimer(roomId, nextBettorId, () => {
+              try {
+                gameManager.executePlayerAction(roomId, nextBettorId, 'fold');
+                io.to(roomId).emit('playerTimeout', { playerId: nextBettorId });
+              } catch (e) {
+                logger.error('Auto-fold error', e instanceof Error ? e : undefined, { playerId: nextBettorId });
+              }
+            }, (remaining, isWarning) => {
+              io.to(roomId).emit('timerUpdate', { playerId: nextBettorId, remaining, warning: isWarning });
+            });
           }
         } else {
           logger.debug('Betting continues - notifying next player', { roomId });
@@ -252,11 +279,22 @@ export const setupSocketHandlers = (
           const nextBettorId = round.getCurrentBettorId();
           logger.debug('Emitting turnNotification', { roomId, playerId: nextBettorId });
           io.to(roomId).emit('turnNotification', {
-            playerId: nextBettorId,
-            currentBet: round.getPlayerBet(nextBettorId),
-            playerBets: round.getAllPlayerBets(),
-            validActions: round.getValidActions(nextBettorId),
-          });
+          playerId: nextBettorId,
+          currentBet: round.getPlayerBet(nextBettorId),
+          playerBets: round.getAllPlayerBets(),
+          validActions: round.getValidActions(nextBettorId),
+        });
+        // Start turn timer for next player
+        turnTimerManager.startTimer(roomId, nextBettorId, () => {
+          try {
+            gameManager.executePlayerAction(roomId, nextBettorId, 'fold');
+            io.to(roomId).emit('playerTimeout', { playerId: nextBettorId });
+          } catch (e) {
+            logger.error('Auto-fold error', e instanceof Error ? e : undefined, { playerId: nextBettorId });
+          }
+        }, (remaining, isWarning) => {
+          io.to(roomId).emit('timerUpdate', { playerId: nextBettorId, remaining, warning: isWarning });
+        });
         }
 
         logger.info('Action completed', { roomId, playerId, action: action.type });
@@ -282,14 +320,50 @@ export const setupSocketHandlers = (
       const roomId = (socket as any).roomId;
       
       logger.logConnection(socket.id, playerId, undefined, false);
-      
+
       if (playerId) {
         // セッション更新（lastSeen更新）
         sessionManager.updateSession(playerId, socket.id);
-        
-        // TODO: グレースピリオド開始、playerDisconnected イベント送信
-        // TODO: 120秒後に自動フォールド処理
+
+        // Emit playerDisconnected to room
+        // const roomId = (socket as any).roomId; // roomId is already defined above
+        if (roomId) {
+          io.to(roomId).emit('playerDisconnected', { playerId });
+        }
+
+        // Start grace period timer for auto-fold if not reconnected
+        setTimeout(() => {
+          if (!sessionManager.isSessionValid(playerId)) {
+            // Session expired, auto-fold
+            try {
+              // const roomId = (socket as any).roomId; // roomId is already defined above
+              if (roomId) {
+                gameManager.executePlayerAction(roomId, playerId, 'fold');
+                io.to(roomId).emit('playerAutoFolded', { playerId });
+              }
+            } catch (e) {
+              logger.error('Auto-fold error on disconnect', e instanceof Error ? e : undefined, { playerId });
+            }
+          }
+        }, TIMEOUT_CONSTANTS.GRACE_PERIOD);
+      }
+    });
+    // Reconnection handler
+    socket.on('reconnectRequest', (data: { playerId: string }) => {
+      const { playerId } = data;
+      const success = sessionManager.reconnect(playerId, socket.id);
+      if (success) {
+        const roomId = (socket as any).roomId;
+        if (roomId) {
+          socket.join(roomId);
+          io.to(roomId).emit('playerReconnected', { playerId });
+          // Optionally send current game state here
+        }
+      } else {
+        socket.emit('error', { message: 'Reconnection failed', code: 'RECONNECT_FAILED' });
       }
     });
   });
+
+
 };
