@@ -53,8 +53,14 @@ export class Round {
     this.lastAggressorId = null;
     this.minRaiseAmount = bigBlind;
 
-    // 次のプレイヤーを初期化（ビッグブラインドの次）
-    this.currentBettor = this.getNextPlayerIndex(this.getBigBlindIndex());
+    // プリフロップの最初のベッターを初期化
+    // 2人プレイヤー: Small Blind (ディーラー)
+    // 3人以上: Big Blindの次 (UTG)
+    if (players.length === 2) {
+      this.currentBettor = this.getSmallBlindIndex();
+    } else {
+      this.currentBettor = this.getNextPlayerIndex(this.getBigBlindIndex());
+    }
   }
 
   /**
@@ -423,6 +429,11 @@ export class Round {
    * スモールブラインドのインデックス
    */
   private getSmallBlindIndex(): number {
+    // 2人プレイヤーの場合: ディーラー = Small Blind
+    if (this.players.length === 2) {
+      return this.dealerIndex;
+    }
+    // 3人以上: ディーラーの次 = Small Blind
     return (this.dealerIndex + 1) % this.players.length;
   }
 
@@ -430,6 +441,11 @@ export class Round {
    * ビッグブラインドのインデックス
    */
   private getBigBlindIndex(): number {
+    // 2人プレイヤーの場合: ディーラーの次（対面）= Big Blind
+    if (this.players.length === 2) {
+      return (this.dealerIndex + 1) % this.players.length;
+    }
+    // 3人以上: ディーラーの次の次 = Big Blind
     return (this.dealerIndex + 2) % this.players.length;
   }
 

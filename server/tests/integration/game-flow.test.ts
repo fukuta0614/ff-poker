@@ -88,7 +88,6 @@ describe('Game Flow Integration Test', () => {
     clientSocket1.on('roomCreated', (data: { roomId: string; hostId: string }) => {
       console.log('[TEST] Room created:', data.roomId);
       roomId = data.roomId;
-      player1Id = data.hostId;
 
       // プレイヤー1がルームに参加
       clientSocket1.emit('joinRoom', {
@@ -99,6 +98,7 @@ describe('Game Flow Integration Test', () => {
 
     clientSocket1.on('joinedRoom', (data: any) => {
       console.log('[TEST] Player1 joined room:', data);
+      player1Id = data.playerId; // 修正: joinedRoomのplayerIdを使用
 
       // プレイヤー2接続
       clientSocket2 = ioClient(`http://localhost:${PORT}`);
@@ -205,9 +205,9 @@ describe('Game Flow Integration Test', () => {
    */
   test('3プレイヤーでプリフロップ全員アクションが正しく実行される', (done) => {
     let roomId: string;
-    let player1Id: string; // SB
-    let player2Id: string; // BB
-    let player3Id: string; // UTG
+    let player1Id: string; // Dealer/UTG (seat 0)
+    let player2Id: string; // SB (seat 1)
+    let player3Id: string; // BB (seat 2)
 
     const turnOrder: string[] = [];
 
@@ -226,7 +226,6 @@ describe('Game Flow Integration Test', () => {
     clientSocket1.on('roomCreated', (data: { roomId: string; hostId: string }) => {
       console.log('[TEST] Room created:', data.roomId);
       roomId = data.roomId;
-      player1Id = data.hostId;
 
       clientSocket1.emit('joinRoom', {
         roomId: roomId,
@@ -236,6 +235,7 @@ describe('Game Flow Integration Test', () => {
 
     clientSocket1.on('joinedRoom', (data: any) => {
       console.log('[TEST] Player1 joined room');
+      player1Id = data.playerId; // 修正: joinedRoomのplayerIdを使用
 
       // プレイヤー2接続
       clientSocket2 = ioClient(`http://localhost:${PORT}`);
@@ -270,37 +270,37 @@ describe('Game Flow Integration Test', () => {
           }, 100);
         });
 
-        // プレイヤー3: ターン通知（UTG）
+        // プレイヤー3: ターン通知（BB）
         clientSocket3.on('turnNotification', (data: any) => {
-          console.log('[TEST] Player3 (UTG) received turnNotification:', data);
+          console.log('[TEST] Player3 (BB) received turnNotification:', data);
           if (data.playerId === player3Id) {
             turnOrder.push('player3');
-            console.log('[TEST] Player3 calling...');
+            console.log('[TEST] Player3 (BB) checking...');
             clientSocket3.emit('action', {
               playerId: player3Id,
-              action: { type: 'call' },
+              action: { type: 'check' },
             });
           }
         });
       });
 
-      // プレイヤー2: ターン通知（BB）
+      // プレイヤー2: ターン通知（SB）
       clientSocket2.on('turnNotification', (data: any) => {
-        console.log('[TEST] Player2 (BB) received turnNotification:', data);
+        console.log('[TEST] Player2 (SB) received turnNotification:', data);
         if (data.playerId === player2Id) {
           turnOrder.push('player2');
-          console.log('[TEST] Player2 checking...');
+          console.log('[TEST] Player2 calling...');
           clientSocket2.emit('action', {
             playerId: player2Id,
-            action: { type: 'check' },
+            action: { type: 'call' },
           });
         }
       });
     });
 
-    // プレイヤー1: ターン通知（SB）
+    // プレイヤー1: ターン通知（UTG/Dealer）
     clientSocket1.on('turnNotification', (data: any) => {
-      console.log('[TEST] Player1 (SB) received turnNotification:', data);
+      console.log('[TEST] Player1 (UTG) received turnNotification:', data);
       if (data.playerId === player1Id) {
         turnOrder.push('player1');
         console.log('[TEST] Player1 calling...');
@@ -316,8 +316,8 @@ describe('Game Flow Integration Test', () => {
       console.log('[TEST] New street reached:', data.state);
       console.log('[TEST] Turn order was:', turnOrder);
 
-      // ターン順序を確認: UTG → SB → BB
-      expect(turnOrder).toEqual(['player3', 'player1', 'player2']);
+      // ターン順序を確認: UTG (Player1) → SB (Player2) → BB (Player3)
+      expect(turnOrder).toEqual(['player1', 'player2', 'player3']);
       expect(data.state).toBe('flop');
 
       done();
@@ -351,7 +351,6 @@ describe('Game Flow Integration Test', () => {
 
     clientSocket1.on('roomCreated', (data: { roomId: string; hostId: string }) => {
       roomId = data.roomId;
-      player1Id = data.hostId;
 
       clientSocket1.emit('joinRoom', {
         roomId: roomId,
@@ -360,6 +359,7 @@ describe('Game Flow Integration Test', () => {
     });
 
     clientSocket1.on('joinedRoom', (data: any) => {
+      player1Id = data.playerId; // 修正: joinedRoomのplayerIdを使用
       clientSocket2 = ioClient(`http://localhost:${PORT}`);
       clientSocket2.on('connect', () => {
         clientSocket2.emit('joinRoom', {

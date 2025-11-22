@@ -180,21 +180,8 @@ export class GameManager {
 
     round.executeAction(playerId, action, amount);
 
-    // ベッティングラウンド完了チェック
-    if (round.isBettingComplete()) {
-      if (round.getState() === 'river') {
-        // ショーダウンへ
-        round.advanceRound();
-        const winnings = round.performShowdown();
-        console.log('Showdown results:', winnings);
-
-        // ラウンド終了処理
-        this.endRound(roomId);
-      } else {
-        // 次のストリートへ
-        round.advanceRound();
-      }
-    }
+    // NOTE: ベッティングラウンド完了とストリート進行の制御はsocketHandlerで行う
+    // GameManagerはアクション実行のみに専念
   }
 
   /**
