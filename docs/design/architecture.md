@@ -313,38 +313,46 @@ const useReconnect = () => {
 ### 主要モジュール設計
 
 #### 1. GameManager（ゲーム管理）
-**責務**: ルームの生成、削除、検索、状態管理
+**責務**: ゲーム全体のフロー制御、ルーム管理のファサード
+- ルームの生成・削除・検索
+- プレイヤーアクションの受付と処理 (`handlePlayerAction`)
+- ゲームイベントの生成と返却
 
 ```typescript
 class GameManager {
   private rooms: Map<string, Room>;
 
-  createRoom(config: RoomConfig): Room;
+  createRoom(hostName: string, smallBlind: number, bigBlind: number): { room: Room; host: Player };
   getRoom(roomId: string): Room | undefined;
-  deleteRoom(roomId: string): void;
-  listRooms(): RoomInfo[];
+  handlePlayerAction(roomId: string, playerId: string, action: ActionType, amount?: number): GameActionResult;
 }
 ```
 
 #### 2. Room（ルームクラス）
-**責務**: ルーム単位でのプレイヤー管理、ラウンド管理
+**責務**: ルーム単位の状態管理、プレイヤー管理、ラウンドライフサイクル
+- プレイヤーの入室・退室管理
+- ラウンド（Round）の生成と保持
+- ルームの状態（待機中、プレイ中など）の管理
 
 ```typescript
 class Room {
   id: string;
-  players: Map<string, Player>;
-  currentRound: Round | null;
-
-  addPlayer(player: Player): void;
+  players: Player[];
+  state: RoomState;
+  
+  addPlayer(playerName: string): Player;
   removePlayer(playerId: string): void;
-  startRound(): void;
+  startRound(): Round;
   endRound(): void;
-  getPublicState(): PublicRoomState;
+  getRound(): Round | undefined;
 }
 ```
 
 #### 3. Round（ラウンドクラス）
-**責務**: 1ゲーム単位の状態遷移とベッティングロジック
+**責務**: 1ハンド（局）単位のポーカーロジック
+- デッキ管理とカード配布
+- ベッティングラウンドの進行管理
+- 勝敗判定とポット分配
 
 ```typescript
 class Round {
@@ -352,11 +360,25 @@ class Round {
   deck: Deck;
   communityCards: string[];
 
-  dealHoleCards(): Map<playerId, string[]>;
-  nextStage(): void;
-  handleAction(playerId: string, action: Action): ActionResult;
-  evaluateWinners(): Winner[];
+  executeAction(playerId: string, action: ActionType, amount?: number): void;
+  advanceRound(): void;
+  performShowdown(): void;
 }
+```
+
+#### 4. SocketHandler（通信層）
+**責務**: クライアントとの通信、イベントの振り分け
+- Socket.ioイベントの受信
+- GameManagerへの処理委譲
+- GameManagerから返されたイベント（GameEvent）のクライアントへの通知
+- 自動フォールドなどのタイマー管理
+
+```typescript
+// イベント駆動型アーキテクチャ
+const processGameEvents = (roomId: string, events: GameEvent[]) => {
+  // イベント種別に応じてクライアントに通知
+  // 必要に応じて遅延処理（ショーダウン後の待機など）
+};
 ```
 
 #### 4. Deck（デッキクラス）
