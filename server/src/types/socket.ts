@@ -2,7 +2,16 @@
  * Socket.io イベント関連の型定義
  */
 
+import { Socket } from 'socket.io';
 import { Action, PublicPlayerInfo, PublicRoomInfo, RoundState } from './game';
+
+/**
+ * サーバーサイドのSocketに独自プロパティを追加
+ */
+export interface ServerSocket extends Socket {
+  playerId?: string;
+  roomId?: string;
+}
 
 // クライアント → サーバー
 

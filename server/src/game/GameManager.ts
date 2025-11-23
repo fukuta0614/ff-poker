@@ -198,26 +198,59 @@ export class GameManager {
    * ラウンド終了処理
    * @param roomId ルームID
    */
-  private endRound(roomId: string): void {
+  public endRound(roomId: string): void {
     const room = this.rooms.get(roomId);
     if (!room) throw new Error('Room not found');
 
     this.activeRounds.delete(roomId);
 
-    // ディーラーボタンを移動
-    room.dealerIndex = (room.dealerIndex + 1) % room.players.length;
+    // 現在のディーラーを保存
+    const currentDealer = room.players[room.dealerIndex];
 
     // チップが0のプレイヤーを除外
+    const oldPlayers = room.players;
     room.players = room.players.filter((p) => p.chips > 0);
 
     if (room.players.length < 2) {
       // ゲーム終了
       room.state = 'finished';
       console.log(`Game finished in room ${roomId}`);
-    } else {
-      // 次のラウンドを開始
-      this.startNewRound(roomId);
+      return;
     }
+
+    // ディーラーボタンを移動（除外を考慮）
+    // 現在のディーラーがまだ残っているか確認
+    const currentDealerStillExists = room.players.find(p => p.id === currentDealer.id);
+
+    if (currentDealerStillExists) {
+      // 現在のディーラーの次のプレイヤーを探す（seat番号で判定）
+      const currentDealerSeat = currentDealer.seat;
+      // 現在のディーラーより大きいseatを持つプレイヤーを探す
+      const nextDealer = room.players.find(p => p.seat > currentDealerSeat);
+
+      if (nextDealer) {
+        // 次のプレイヤーが見つかった
+        room.dealerIndex = room.players.findIndex(p => p.id === nextDealer.id);
+      } else {
+        // 見つからない場合は最初のプレイヤーに戻る
+        room.dealerIndex = 0;
+      }
+    } else {
+      // 現在のディーラーが除外された場合
+      // 除外されたディーラーの次のseatを持つプレイヤーを探す
+      const currentDealerSeat = currentDealer.seat;
+      const nextDealer = room.players.find(p => p.seat > currentDealerSeat);
+
+      if (nextDealer) {
+        room.dealerIndex = room.players.findIndex(p => p.id === nextDealer.id);
+      } else {
+        // 見つからない場合は最初のプレイヤー
+        room.dealerIndex = 0;
+      }
+    }
+
+    // 次のラウンドを開始
+    this.startNewRound(roomId);
   }
 
   /**

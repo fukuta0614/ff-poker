@@ -436,8 +436,17 @@ export class Round {
    */
   private getNextPlayerIndex(fromIndex: number): number {
     let next = (fromIndex + 1) % this.players.length;
+    let attempts = 0;
+    const maxAttempts = this.players.length;
+
     while (this.folded.has(this.players[next].id)) {
       next = (next + 1) % this.players.length;
+      attempts++;
+
+      if (attempts >= maxAttempts) {
+        // 全員フォールドしている場合
+        throw new Error('No active players remaining');
+      }
     }
     return next;
   }
@@ -553,5 +562,12 @@ export class Round {
     }
 
     return validActions;
+  }
+
+  /**
+   * アクティブ（フォールドしていない）プレイヤー数を取得
+   */
+  public getActivePlayersCount(): number {
+    return this.players.filter((p) => !this.folded.has(p.id)).length;
   }
 }

@@ -2,30 +2,111 @@
  * Socket.io イベントハンドラ
  */
 
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
 import { GameManager } from '../game/GameManager';
 import {
+  ServerSocket,
   JoinRoomData,
   StartGameData,
   ActionData,
   ChatMessageData,
 } from '../types/socket';
+import { validatePlayerName, validateBlindAmount, validateRoomId } from '../utils/validation';
+
+/**
+ * 次のラウンドを開始する共通処理
+ * ショーダウン後や不戦勝後に呼び出される
+ */
+const startNextRound = (
+  io: Server,
+  gameManager: GameManager,
+  roomId: string
+): void => {
+  try {
+    console.log(`[DEBUG] Attempting to start next round in room ${roomId}`);
+    gameManager.endRound(roomId);
+
+    const updatedRoom = gameManager.getRoom(roomId);
+    const newRound = gameManager.getActiveRound(roomId);
+
+    if (!updatedRoom || !newRound) {
+      // ゲーム終了（プレイヤーが2人未満）
+      console.log(`[DEBUG] Game ended in room ${roomId} - not enough players`);
+      io.to(roomId).emit('gameEnded', {
+        reason: 'Not enough players',
+      });
+      return;
+    }
+
+    console.log(`[DEBUG] Starting new round in room ${roomId}`);
+
+    // 新しいラウンド開始を通知
+    io.to(roomId).emit('gameStarted', {
+      roomId: updatedRoom.id,
+      dealerIndex: updatedRoom.dealerIndex,
+      players: updatedRoom.players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        chips: p.chips,
+        seat: p.seat,
+      })),
+    });
+
+    // 各プレイヤーに手札を配る
+    for (const player of updatedRoom.players) {
+      const hand = newRound.getPlayerHand(player.id);
+      if (hand) {
+        const playerSocket = Array.from(io.sockets.sockets.values())
+          .find((s): s is ServerSocket => (s as ServerSocket).playerId === player.id) as ServerSocket | undefined;
+
+        if (playerSocket) {
+          playerSocket.emit('dealHand', {
+            playerId: player.id,
+            hand: hand,
+          });
+        }
+      }
+    }
+
+    // 最初のプレイヤーにターン通知
+    const currentBettorId = newRound.getCurrentBettorId();
+    io.to(roomId).emit('turnNotification', {
+      playerId: currentBettorId,
+      currentBet: newRound.getPlayerBet(currentBettorId),
+      playerBets: newRound.getAllPlayerBets(),
+      validActions: newRound.getValidActions(currentBettorId),
+    });
+
+    console.log(`[DEBUG] New round started successfully in room ${roomId}`);
+  } catch (error) {
+    console.error(`[ERROR] Failed to start next round:`, error);
+  }
+};
 
 export const setupSocketHandlers = (io: Server, gameManager: GameManager): void => {
-  io.on('connection', (socket: Socket) => {
+  io.on('connection', (socket: ServerSocket) => {
     console.log(`Client connected: ${socket.id}`);
 
     // ルーム作成
     socket.on('createRoom', (data: { hostName: string; smallBlind: number; bigBlind: number }) => {
       try {
-        const { room, host } = gameManager.createRoom(data.hostName, data.smallBlind, data.bigBlind);
+        // 入力バリデーション
+        const hostName = validatePlayerName(data.hostName);
+        const smallBlind = validateBlindAmount(data.smallBlind, 'Small blind');
+        const bigBlind = validateBlindAmount(data.bigBlind, 'Big blind');
+
+        if (bigBlind <= smallBlind) {
+          throw new Error('Big blind must be greater than small blind');
+        }
+
+        const { room, host } = gameManager.createRoom(hostName, smallBlind, bigBlind);
 
         // ソケットをルームに参加させる
         socket.join(room.id);
 
         // プレイヤーIDとルームIDを保存
-        (socket as any).playerId = host.id;
-        (socket as any).roomId = room.id;
+        socket.playerId = host.id;
+        socket.roomId = room.id;
 
         socket.emit('roomCreated', {
           roomId: room.id,
@@ -44,20 +125,24 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
     // ルーム参加
     socket.on('joinRoom', (data: JoinRoomData) => {
       try {
-        const room = gameManager.getRoom(data.roomId);
+        // 入力バリデーション
+        const roomId = validateRoomId(data.roomId);
+        const playerName = validatePlayerName(data.playerName);
+
+        const room = gameManager.getRoom(roomId);
         if (!room) {
           socket.emit('error', { message: 'Room not found', code: 'ROOM_NOT_FOUND' });
           return;
         }
 
-        const player = gameManager.addPlayer(data.roomId, data.playerName);
+        const player = gameManager.addPlayer(roomId, playerName);
 
         // socketをルームに参加させる
-        socket.join(data.roomId);
+        socket.join(roomId);
 
         // プレイヤーIDを保存
-        (socket as any).playerId = player.id;
-        (socket as any).roomId = data.roomId;
+        socket.playerId = player.id;
+        socket.roomId = roomId;
 
         // 参加通知（全プレイヤー情報を含める）
         socket.emit('joinedRoom', {
@@ -158,7 +243,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
     socket.on('action', (data: ActionData) => {
       try {
         const { playerId, action } = data;
-        const roomId = (socket as any).roomId;
+        const roomId = socket.roomId;
 
         console.log(`[DEBUG] action received - playerId: ${playerId}, action: ${action.type}, amount: ${action.amount}`);
 
@@ -220,29 +305,73 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
               hand: round.getPlayerHand(p.id),
             })),
           });
+
+          // 次のラウンドへの自動遷移（3秒後）
+          setTimeout(() => {
+            startNextRound(io, gameManager, roomId);
+          }, 3000);
         } else if (round.isBettingComplete()) {
-          console.log(`[DEBUG] Betting complete - advancing to next street`);
-          // 次のストリートへ進む（重要！）
-          round.advanceRound();
+          // 勝者が決まったかチェック（1人以外全員フォールド）
+          if (round.getActivePlayersCount() === 1) {
+            console.log(`[DEBUG] Betting complete & Only 1 player left - Win by fold`);
+            // ショーダウン実行（不戦勝）
+            round.performShowdown();
 
-          console.log(`[DEBUG] New street: ${round.getState()}`);
-
-          // 新しいストリート情報を通知
-          io.to(roomId).emit('newStreet', {
-            state: round.getState(),
-            communityCards: round.getCommunityCards(),
-          });
-
-          // 次のストリートの最初のプレイヤーにターン通知
-          if (!round.isComplete()) {
-            const nextBettorId = round.getCurrentBettorId();
-            console.log(`[DEBUG] Emitting turnNotification to: ${nextBettorId}`);
-            io.to(roomId).emit('turnNotification', {
-              playerId: nextBettorId,
-              currentBet: round.getPlayerBet(nextBettorId),
-              playerBets: round.getAllPlayerBets(),
-              validActions: round.getValidActions(nextBettorId),
+            // ショーダウン結果を通知
+            io.to(roomId).emit('showdown', {
+              players: room.players.map((p) => ({
+                id: p.id,
+                chips: p.chips,
+                hand: round.getPlayerHand(p.id),
+              })),
             });
+
+            // 次のラウンドへの自動遷移（3秒後）
+            setTimeout(() => {
+              startNextRound(io, gameManager, roomId);
+            }, 3000);
+          } else {
+            console.log(`[DEBUG] Betting complete - advancing to next street`);
+            // 次のストリートへ進む
+            round.advanceRound();
+
+            console.log(`[DEBUG] New street: ${round.getState()}`);
+
+            // 新しいストリート情報を通知
+            io.to(roomId).emit('newStreet', {
+              state: round.getState(),
+              communityCards: round.getCommunityCards(),
+            });
+
+            // ショーダウンに到達した場合、即座にショーダウンを実行
+            if (round.isComplete()) {
+              console.log(`[DEBUG] Reached showdown - performing showdown`);
+              round.performShowdown();
+
+              // ショーダウン結果を通知
+              io.to(roomId).emit('showdown', {
+                players: room.players.map((p) => ({
+                  id: p.id,
+                  chips: p.chips,
+                  hand: round.getPlayerHand(p.id),
+                })),
+              });
+
+              // 次のラウンドへの自動遷移（3秒後）
+              setTimeout(() => {
+                startNextRound(io, gameManager, roomId);
+              }, 3000);
+            } else {
+              // 次のストリートの最初のプレイヤーにターン通知
+              const nextBettorId = round.getCurrentBettorId();
+              console.log(`[DEBUG] Emitting turnNotification to: ${nextBettorId}`);
+              io.to(roomId).emit('turnNotification', {
+                playerId: nextBettorId,
+                currentBet: round.getPlayerBet(nextBettorId),
+                playerBets: round.getAllPlayerBets(),
+                validActions: round.getValidActions(nextBettorId),
+              });
+            }
           }
         } else {
           console.log(`[DEBUG] Betting continues - notifying next player`);
