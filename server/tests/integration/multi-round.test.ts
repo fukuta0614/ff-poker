@@ -7,11 +7,17 @@ import { Server as SocketIOServer } from 'socket.io';
 import { io as ioClient, Socket as ClientSocket } from 'socket.io-client';
 import { GameManager } from '../../src/game/GameManager';
 import { setupSocketHandlers } from '../../src/socket/socketHandler';
+import { SessionManager } from '../../src/services/SessionManager';
+import { TurnTimerManager } from '../../src/services/TurnTimerManager';
+import { LoggerService } from '../../src/services/LoggerService';
 
 describe('Multi-Round E2E Test', () => {
   let io: SocketIOServer;
   let httpServer: any;
   let gameManager: GameManager;
+  let sessionManager: SessionManager;
+  let turnTimerManager: TurnTimerManager;
+  let logger: LoggerService;
   let clientSocket1: ClientSocket;
   let clientSocket2: ClientSocket;
   const PORT = 4001;
@@ -25,7 +31,10 @@ describe('Multi-Round E2E Test', () => {
       },
     });
     gameManager = new GameManager();
-    setupSocketHandlers(io, gameManager);
+    sessionManager = new SessionManager();
+    turnTimerManager = new TurnTimerManager();
+    logger = new LoggerService();
+    setupSocketHandlers(io, gameManager, sessionManager, turnTimerManager, logger);
 
     httpServer.listen(PORT, () => {
       console.log(`[E2E] Test server started on port ${PORT}`);

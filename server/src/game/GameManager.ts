@@ -1,20 +1,13 @@
-/**
- * ゲームマネージャークラス
- * 全てのルームの管理を行う
- */
-
-import { Room, PublicRoomInfo, Player } from '../types/game';
+import { Player, PublicRoomInfo, GameActionResult, GameEvent, ActionType } from '../types/game';
+import { Room } from './Room';
 import { Round } from './Round';
 import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_BUY_IN, MAX_PLAYERS } from '../utils/constants';
 
 export class GameManager {
   private rooms: Map<string, Room>;
-  private activeRounds: Map<string, Round>; // roomId -> Round
 
   constructor() {
     this.rooms = new Map();
-    this.activeRounds = new Map();
   }
 
   /**
@@ -25,35 +18,16 @@ export class GameManager {
    * @returns 作成されたルームとホストプレイヤー情報
    */
   public createRoom(hostName: string, smallBlind: number, bigBlind: number): { room: Room; host: Player } {
-    const roomId = uuidv4().slice(0, 8); // 短いID
     const hostId = uuidv4();
+    const room = new Room(hostId, hostName, smallBlind, bigBlind);
 
-    // ホストプレイヤーを作成
-    const hostPlayer: Player = {
-      id: hostId,
-      name: hostName,
-      chips: DEFAULT_BUY_IN,
-      seat: 0,
-      connected: true,
-      lastSeen: Date.now(),
-    };
+    this.rooms.set(room.id, room);
+    console.log(`Room created: ${room.id} by ${hostName} (Player ID: ${hostId})`);
 
-    const room: Room = {
-      id: roomId,
-      hostId,
-      players: [hostPlayer], // ホストを最初のプレイヤーとして追加
-      state: 'waiting',
-      dealerIndex: 0,
-      smallBlind,
-      bigBlind,
-      pot: 0,
-      createdAt: Date.now(),
-    };
+    // Host is already added in constructor
+    const host = room.getPlayer(hostId)!;
 
-    this.rooms.set(roomId, room);
-    console.log(`Room created: ${roomId} by ${hostName} (Player ID: ${hostId})`);
-
-    return { room, host: hostPlayer };
+    return { room, host };
   }
 
   /**
@@ -79,13 +53,7 @@ export class GameManager {
    * @returns ルーム公開情報の配列
    */
   public listRooms(): PublicRoomInfo[] {
-    return Array.from(this.rooms.values()).map((room) => ({
-      id: room.id,
-      playerCount: room.players.length,
-      state: room.state,
-      smallBlind: room.smallBlind,
-      bigBlind: room.bigBlind,
-    }));
+    return Array.from(this.rooms.values()).map((room) => room.getPublicInfo());
   }
 
   /**
@@ -106,24 +74,7 @@ export class GameManager {
     const room = this.rooms.get(roomId);
     if (!room) throw new Error('Room not found');
 
-    if (room.state !== 'waiting') {
-      throw new Error('Game already started');
-    }
-
-    if (room.players.length >= MAX_PLAYERS) {
-      throw new Error('Room is full');
-    }
-
-    const player: Player = {
-      id: uuidv4(),
-      name: playerName,
-      chips: DEFAULT_BUY_IN,
-      seat: room.players.length,
-      connected: true,
-      lastSeen: Date.now(),
-    };
-
-    room.players.push(player);
+    const player = room.addPlayer(playerName);
     console.log(`Player ${playerName} joined room ${roomId}`);
 
     return player;
@@ -137,47 +88,158 @@ export class GameManager {
     const room = this.rooms.get(roomId);
     if (!room) throw new Error('Room not found');
 
-    if (room.state !== 'waiting') {
-      throw new Error('Game already started');
-    }
-
-    if (room.players.length < 2) {
-      throw new Error('Need at least 2 players');
-    }
-
-    room.state = 'in_progress';
-
-    // 新しいラウンドを開始
-    this.startNewRound(roomId);
-  }
-
-  /**
-   * 新しいラウンドを開始
-   * @param roomId ルームID
-   */
-  private startNewRound(roomId: string): void {
-    const room = this.rooms.get(roomId);
-    if (!room) throw new Error('Room not found');
-
-    const round = new Round(
-      room.players,
-      room.dealerIndex,
-      room.smallBlind,
-      room.bigBlind
-    );
-
-    round.start();
-    this.activeRounds.set(roomId, round);
-
+    room.startRound();
     console.log(`Round started in room ${roomId}`);
   }
 
   /**
-   * プレイヤーアクションを実行
+   * プレイヤーアクションを実行し、ゲーム状態を進行させる
    * @param roomId ルームID
    * @param playerId プレイヤーID
    * @param action アクション
    * @param amount 金額（レイズ時）
+   * @returns アクション結果と発生したイベント
+   */
+  public handlePlayerAction(
+    roomId: string,
+    playerId: string,
+    action: ActionType,
+    amount?: number
+  ): GameActionResult {
+    const events: GameEvent[] = [];
+    const room = this.rooms.get(roomId);
+    
+    if (!room) {
+      return { success: false, error: 'Room not found', events };
+    }
+
+    const round = room.getRound();
+    if (!round) {
+      return { success: false, error: 'No active round', events };
+    }
+
+    try {
+      // 1. Action Execution
+      const roundAction = action === 'bet' ? 'raise' : action;
+      round.executeAction(playerId, roundAction, amount);
+
+      events.push({
+        type: 'actionPerformed',
+        payload: {
+          playerId,
+          action,
+          amount,
+          pot: round.getPot(),
+          playerBets: round.getAllPlayerBets(),
+        },
+      });
+
+      // 2. Check Game State Transitions
+      if (round.isComplete()) {
+        // Showdown (River complete)
+        this.handleShowdown(room, round, events);
+        this.handleNextRound(room, events);
+      } else if (round.isBettingComplete()) {
+        if (round.getActivePlayersCount() === 1) {
+          // Win by fold
+          this.handleShowdown(room, round, events);
+          this.handleNextRound(room, events);
+        } else {
+          // Advance Street
+          round.advanceRound();
+          events.push({
+            type: 'newStreet',
+            payload: {
+              state: round.getState(),
+              communityCards: round.getCommunityCards(),
+            },
+          });
+
+          if (round.isComplete()) {
+            // Showdown (reached after advancing)
+            this.handleShowdown(room, round, events);
+            this.handleNextRound(room, events);
+          } else {
+            // Next Turn
+            this.addTurnChangeEvent(round, events);
+          }
+        }
+      } else {
+        // Betting continues
+        this.addTurnChangeEvent(round, events);
+      }
+
+      return { success: true, events };
+
+    } catch (error) {
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error', 
+        events 
+      };
+    }
+  }
+
+  private handleShowdown(room: Room, round: Round, events: GameEvent[]): void {
+    round.performShowdown();
+    events.push({
+      type: 'showdown',
+      payload: {
+        players: room.players.map((p) => ({
+          id: p.id,
+          chips: p.chips,
+          hand: round.getPlayerHand(p.id),
+        })),
+      },
+    });
+  }
+
+  private handleNextRound(room: Room, events: GameEvent[]): void {
+    room.endRound();
+
+    if (room.state === 'finished') {
+      events.push({ type: 'gameEnded', payload: { reason: 'Not enough players' } });
+      return;
+    }
+
+    const newRound = room.getRound();
+    if (newRound) {
+      events.push({
+        type: 'roundStarted',
+        payload: {
+          roomId: room.id,
+          dealerIndex: room.dealerIndex,
+          players: room.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            chips: p.chips,
+            seat: p.seat,
+            connected: p.connected,
+            lastSeen: p.lastSeen
+          })),
+        },
+      });
+
+      this.addTurnChangeEvent(newRound, events);
+    }
+  }
+
+  private addTurnChangeEvent(round: Round, events: GameEvent[]): void {
+    const nextBettorId = round.getCurrentBettorId();
+    events.push({
+      type: 'turnChange',
+      payload: {
+        playerId: nextBettorId,
+        currentBet: round.getPlayerBet(nextBettorId),
+        playerBets: round.getAllPlayerBets(),
+        validActions: round.getValidActions(nextBettorId),
+      },
+    });
+  }
+
+  /**
+   * プレイヤーアクションを実行 (Legacy wrapper for compatibility if needed, but prefer handlePlayerAction)
+   * @deprecated Use handlePlayerAction instead
    */
   public executePlayerAction(
     roomId: string,
@@ -185,13 +247,10 @@ export class GameManager {
     action: 'fold' | 'call' | 'raise' | 'check' | 'allin',
     amount?: number
   ): void {
-    const round = this.activeRounds.get(roomId);
-    if (!round) throw new Error('No active round');
-
-    round.executeAction(playerId, action, amount);
-
-    // NOTE: ベッティングラウンド完了とストリート進行の制御はsocketHandlerで行う
-    // GameManagerはアクション実行のみに専念
+    const result = this.handlePlayerAction(roomId, playerId, action, amount);
+    if (!result.success) {
+      throw new Error(result.error);
+    }
   }
 
   /**
@@ -202,55 +261,7 @@ export class GameManager {
     const room = this.rooms.get(roomId);
     if (!room) throw new Error('Room not found');
 
-    this.activeRounds.delete(roomId);
-
-    // 現在のディーラーを保存
-    const currentDealer = room.players[room.dealerIndex];
-
-    // チップが0のプレイヤーを除外
-    const oldPlayers = room.players;
-    room.players = room.players.filter((p) => p.chips > 0);
-
-    if (room.players.length < 2) {
-      // ゲーム終了
-      room.state = 'finished';
-      console.log(`Game finished in room ${roomId}`);
-      return;
-    }
-
-    // ディーラーボタンを移動（除外を考慮）
-    // 現在のディーラーがまだ残っているか確認
-    const currentDealerStillExists = room.players.find(p => p.id === currentDealer.id);
-
-    if (currentDealerStillExists) {
-      // 現在のディーラーの次のプレイヤーを探す（seat番号で判定）
-      const currentDealerSeat = currentDealer.seat;
-      // 現在のディーラーより大きいseatを持つプレイヤーを探す
-      const nextDealer = room.players.find(p => p.seat > currentDealerSeat);
-
-      if (nextDealer) {
-        // 次のプレイヤーが見つかった
-        room.dealerIndex = room.players.findIndex(p => p.id === nextDealer.id);
-      } else {
-        // 見つからない場合は最初のプレイヤーに戻る
-        room.dealerIndex = 0;
-      }
-    } else {
-      // 現在のディーラーが除外された場合
-      // 除外されたディーラーの次のseatを持つプレイヤーを探す
-      const currentDealerSeat = currentDealer.seat;
-      const nextDealer = room.players.find(p => p.seat > currentDealerSeat);
-
-      if (nextDealer) {
-        room.dealerIndex = room.players.findIndex(p => p.id === nextDealer.id);
-      } else {
-        // 見つからない場合は最初のプレイヤー
-        room.dealerIndex = 0;
-      }
-    }
-
-    // 次のラウンドを開始
-    this.startNewRound(roomId);
+    room.endRound();
   }
 
   /**
@@ -259,6 +270,7 @@ export class GameManager {
    * @returns ラウンド、存在しない場合はundefined
    */
   public getActiveRound(roomId: string): Round | undefined {
-    return this.activeRounds.get(roomId);
+    const room = this.rooms.get(roomId);
+    return room?.getRound() || undefined;
   }
 }

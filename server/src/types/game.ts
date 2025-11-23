@@ -13,7 +13,7 @@ export type Player = {
 
 export type RoomState = 'waiting' | 'in_progress' | 'finished';
 
-export type Room = {
+export type RoomData = {
   id: string; // ルームID
   hostId: string; // ホストプレイヤーのID
   players: Player[]; // プレイヤー配列（最大6人）
@@ -44,7 +44,7 @@ export type SidePot = {
   eligiblePlayers: string[]; // このポットに参加できるプレイヤーID配列
 };
 
-export type ActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise';
+export type ActionType = 'fold' | 'check' | 'call' | 'bet' | 'raise' | 'allin';
 
 export type Action = {
   playerId: string;
@@ -68,4 +68,26 @@ export type PublicRoomInfo = {
   state: RoomState;
   smallBlind: number;
   bigBlind: number;
+};
+
+export type GameEventType = 
+  | 'actionPerformed'
+  | 'newStreet'
+  | 'showdown'
+  | 'gameEnded'
+  | 'turnChange'
+  | 'roundStarted';
+
+export type GameEvent = 
+  | { type: 'actionPerformed'; payload: { playerId: string; action: ActionType; amount?: number; pot: number; playerBets: Record<string, number> } }
+  | { type: 'newStreet'; payload: { state: RoundStage; communityCards: string[] } }
+  | { type: 'showdown'; payload: { players: { id: string; chips: number; hand: [string, string] | undefined }[] } }
+  | { type: 'gameEnded'; payload: { reason: string } }
+  | { type: 'turnChange'; payload: { playerId: string; currentBet: number; playerBets: Record<string, number>; validActions: string[] } }
+  | { type: 'roundStarted'; payload: { roomId: string; dealerIndex: number; players: PublicPlayerInfo[] } };
+
+export type GameActionResult = {
+  success: boolean;
+  error?: string;
+  events: GameEvent[];
 };
