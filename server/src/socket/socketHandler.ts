@@ -3,7 +3,11 @@
  */
 
 import { Server } from 'socket.io';
+import { TIMEOUT_CONSTANTS } from '../utils/constants';
 import { GameManager } from '../game/GameManager';
+import { SessionManager } from '../services/SessionManager';
+import { TurnTimerManager } from '../services/TurnTimerManager';
+import { LoggerService } from '../services/LoggerService';
 import {
   ServerSocket,
   JoinRoomData,
@@ -20,10 +24,12 @@ import { validatePlayerName, validateBlindAmount, validateRoomId } from '../util
 const startNextRound = (
   io: Server,
   gameManager: GameManager,
-  roomId: string
+  roomId: string,
+  logger: LoggerService,
+  turnTimerManager: TurnTimerManager
 ): void => {
   try {
-    console.log(`[DEBUG] Attempting to start next round in room ${roomId}`);
+    logger.debug('Attempting to start next round', { roomId });
     gameManager.endRound(roomId);
 
     const updatedRoom = gameManager.getRoom(roomId);
@@ -31,14 +37,14 @@ const startNextRound = (
 
     if (!updatedRoom || !newRound) {
       // ゲーム終了（プレイヤーが2人未満）
-      console.log(`[DEBUG] Game ended in room ${roomId} - not enough players`);
+      logger.debug('Game ended - not enough players', { roomId });
       io.to(roomId).emit('gameEnded', {
         reason: 'Not enough players',
       });
       return;
     }
 
-    console.log(`[DEBUG] Starting new round in room ${roomId}`);
+    logger.debug('Starting new round', { roomId });
 
     // 新しいラウンド開始を通知
     io.to(roomId).emit('gameStarted', {
@@ -77,15 +83,34 @@ const startNextRound = (
       validActions: newRound.getValidActions(currentBettorId),
     });
 
-    console.log(`[DEBUG] New round started successfully in room ${roomId}`);
+    // Start turn timer for the first player
+    turnTimerManager.startTimer(roomId, currentBettorId, () => {
+      // Auto-fold on timeout
+      try {
+        gameManager.executePlayerAction(roomId, currentBettorId, 'fold');
+        io.to(roomId).emit('playerTimeout', { playerId: currentBettorId });
+      } catch (e) {
+        logger.error('Auto-fold error', e instanceof Error ? e : undefined, { playerId: currentBettorId });
+      }
+    }, (remaining, isWarning) => {
+      io.to(roomId).emit('timerUpdate', { playerId: currentBettorId, remaining, warning: isWarning });
+    });
+
+    logger.debug('New round started successfully', { roomId });
   } catch (error) {
-    console.error(`[ERROR] Failed to start next round:`, error);
+    logger.error('Failed to start next round', error instanceof Error ? error : undefined, { roomId });
   }
 };
 
-export const setupSocketHandlers = (io: Server, gameManager: GameManager): void => {
+export const setupSocketHandlers = (
+  io: Server,
+  gameManager: GameManager,
+  sessionManager: SessionManager,
+  turnTimerManager: TurnTimerManager,
+  logger: LoggerService
+): void => {
   io.on('connection', (socket: ServerSocket) => {
-    console.log(`Client connected: ${socket.id}`);
+    logger.logConnection(socket.id, undefined, undefined, true);
 
     // ルーム作成
     socket.on('createRoom', (data: { hostName: string; smallBlind: number; bigBlind: number }) => {
@@ -104,6 +129,9 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
         // ソケットをルームに参加させる
         socket.join(room.id);
 
+        // セッション作成
+        sessionManager.createSession(host.id, socket.id);
+
         // プレイヤーIDとルームIDを保存
         socket.playerId = host.id;
         socket.roomId = room.id;
@@ -116,7 +144,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           chips: host.chips,
         });
 
-        console.log(`Room created: ${room.id}`);
+        logger.info('Room created', { roomId: room.id });
       } catch (error) {
         socket.emit('error', { message: 'Failed to create room', code: 'CREATE_ROOM_ERROR' });
       }
@@ -139,6 +167,9 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
         // socketをルームに参加させる
         socket.join(roomId);
+
+        // セッション作成
+        sessionManager.createSession(player.id, socket.id);
 
         // プレイヤーIDを保存
         socket.playerId = player.id;
@@ -165,7 +196,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           chips: player.chips,
         });
 
-        console.log(`${data.playerName} joined room: ${data.roomId}`);
+        logger.info('Player joined room', { playerName: data.playerName, roomId: data.roomId, playerId: player.id });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to join room';
         socket.emit('error', { message, code: 'JOIN_ROOM_ERROR' });
@@ -216,8 +247,11 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
         // 最初のプレイヤーにターン通知
         const currentBettorId = round.getCurrentBettorId();
-        console.log(`[DEBUG] Game started - room players:`, room.players.map(p => ({ id: p.id, name: p.name })));
-        console.log(`[DEBUG] Game started - current bettor: ${currentBettorId}`);
+        logger.debug('Game started', {
+          roomId: data.roomId,
+          players: room.players.map(p => ({ id: p.id, name: p.name })),
+          currentBettorId,
+        });
 
         // Delay emission to ensure client listeners are attached
         setTimeout(() => {
@@ -228,11 +262,23 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
             validActions: round.getValidActions(currentBettorId),
           });
 
-          console.log(`[DEBUG] Sent turnNotification to room ${data.roomId} for player ${currentBettorId}`);
-          console.log(`[DEBUG] Valid actions:`, round.getValidActions(currentBettorId));
+          logger.debug('Sent turnNotification', { roomId: data.roomId, playerId: currentBettorId, validActions: round.getValidActions(currentBettorId) });
         }, 0);
 
-        console.log(`Game started in room: ${data.roomId}`);
+        // Start turn timer
+        turnTimerManager.startTimer(data.roomId, currentBettorId, () => {
+          // Auto-fold on timeout
+          try {
+            gameManager.executePlayerAction(data.roomId, currentBettorId, 'fold');
+            io.to(data.roomId).emit('playerTimeout', { playerId: currentBettorId });
+          } catch (e) {
+            logger.error('Auto-fold error', e instanceof Error ? e : undefined, { playerId: currentBettorId });
+          }
+        }, (remaining, isWarning) => {
+          io.to(data.roomId).emit('timerUpdate', { playerId: currentBettorId, remaining, warning: isWarning });
+        });
+
+        logger.info('Game started in room', { roomId: data.roomId });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to start game';
         socket.emit('error', { message, code: 'START_GAME_ERROR' });
@@ -245,12 +291,15 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
         const { playerId, action } = data;
         const roomId = socket.roomId;
 
-        console.log(`[DEBUG] action received - playerId: ${playerId}, action: ${action.type}, amount: ${action.amount}`);
+        logger.debug('Action received', { playerId, action: action.type, amount: action.amount });
 
         if (!roomId) {
           socket.emit('error', { message: 'Not in a room', code: 'NOT_IN_ROOM' });
           return;
         }
+
+        // Cancel any existing turn timer for this room
+        turnTimerManager.cancelTimer(roomId);
 
         const round = gameManager.getActiveRound(roomId);
         if (!round) {
@@ -258,9 +307,12 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           return;
         }
 
-        console.log(`[DEBUG] Before action - currentBettorId: ${round.getCurrentBettorId()}`);
-        console.log(`[DEBUG] Before action - isBettingComplete: ${round.isBettingComplete()}`);
-        console.log(`[DEBUG] Before action - isComplete: ${round.isComplete()}`);
+        logger.debug('Before action', {
+          roomId,
+          currentBettorId: round.getCurrentBettorId(),
+          isBettingComplete: round.isBettingComplete(),
+          isComplete: round.isComplete(),
+        });
 
         // アクション実行 ('bet'は'raise'として扱う)
         const actionType = action.type === 'bet' ? 'raise' : action.type;
@@ -271,16 +323,19 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           // アクションエラーを個別に処理
           const message = actionError instanceof Error ? actionError.message : 'Invalid action';
           socket.emit('error', { message, code: 'ACTION_ERROR' });
-          console.error(`[ERROR] Action error from ${playerId}: ${message}`);
+          logger.error('Action error', undefined, { playerId, message });
           return;
         }
 
         const room = gameManager.getRoom(roomId);
         if (!room) return;
 
-        console.log(`[DEBUG] After action - currentBettorId: ${round.getCurrentBettorId()}`);
-        console.log(`[DEBUG] After action - isBettingComplete: ${round.isBettingComplete()}`);
-        console.log(`[DEBUG] After action - isComplete: ${round.isComplete()}`);
+        logger.debug('After action', {
+          roomId,
+          currentBettorId: round.getCurrentBettorId(),
+          isBettingComplete: round.isBettingComplete(),
+          isComplete: round.isComplete(),
+        });
 
         // 全プレイヤーにアクション通知
         io.to(roomId).emit('actionPerformed', {
@@ -293,7 +348,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
         // ラウンドの状態に応じて通知
         if (round.isComplete()) {
-          console.log(`[DEBUG] Round complete - performing showdown`);
+          logger.debug('Round complete - performing showdown', { roomId });
           // ショーダウン実行
           round.performShowdown();
 
@@ -308,12 +363,12 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
           // 次のラウンドへの自動遷移（3秒後）
           setTimeout(() => {
-            startNextRound(io, gameManager, roomId);
+            startNextRound(io, gameManager, roomId, logger, turnTimerManager);
           }, 3000);
         } else if (round.isBettingComplete()) {
           // 勝者が決まったかチェック（1人以外全員フォールド）
           if (round.getActivePlayersCount() === 1) {
-            console.log(`[DEBUG] Betting complete & Only 1 player left - Win by fold`);
+            logger.debug('Betting complete & Only 1 player left - Win by fold', { roomId });
             // ショーダウン実行（不戦勝）
             round.performShowdown();
 
@@ -328,14 +383,14 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
             // 次のラウンドへの自動遷移（3秒後）
             setTimeout(() => {
-              startNextRound(io, gameManager, roomId);
+              startNextRound(io, gameManager, roomId, logger, turnTimerManager);
             }, 3000);
           } else {
-            console.log(`[DEBUG] Betting complete - advancing to next street`);
+            logger.debug('Betting complete - advancing to next street', { roomId });
             // 次のストリートへ進む
             round.advanceRound();
 
-            console.log(`[DEBUG] New street: ${round.getState()}`);
+            logger.debug('New street', { roomId, state: round.getState() });
 
             // 新しいストリート情報を通知
             io.to(roomId).emit('newStreet', {
@@ -345,7 +400,7 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
             // ショーダウンに到達した場合、即座にショーダウンを実行
             if (round.isComplete()) {
-              console.log(`[DEBUG] Reached showdown - performing showdown`);
+              logger.debug('Reached showdown - performing showdown', { roomId });
               round.performShowdown();
 
               // ショーダウン結果を通知
@@ -359,38 +414,62 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
               // 次のラウンドへの自動遷移（3秒後）
               setTimeout(() => {
-                startNextRound(io, gameManager, roomId);
+                startNextRound(io, gameManager, roomId, logger, turnTimerManager);
               }, 3000);
             } else {
               // 次のストリートの最初のプレイヤーにターン通知
               const nextBettorId = round.getCurrentBettorId();
-              console.log(`[DEBUG] Emitting turnNotification to: ${nextBettorId}`);
+              logger.debug('Emitting turnNotification', { roomId, playerId: nextBettorId });
               io.to(roomId).emit('turnNotification', {
                 playerId: nextBettorId,
                 currentBet: round.getPlayerBet(nextBettorId),
                 playerBets: round.getAllPlayerBets(),
                 validActions: round.getValidActions(nextBettorId),
               });
+
+              // Start turn timer for next player
+              turnTimerManager.startTimer(roomId, nextBettorId, () => {
+                try {
+                  gameManager.executePlayerAction(roomId, nextBettorId, 'fold');
+                  io.to(roomId).emit('playerTimeout', { playerId: nextBettorId });
+                } catch (e) {
+                  logger.error('Auto-fold error', e instanceof Error ? e : undefined, { playerId: nextBettorId });
+                }
+              }, (remaining, isWarning) => {
+                io.to(roomId).emit('timerUpdate', { playerId: nextBettorId, remaining, warning: isWarning });
+              });
             }
           }
         } else {
-          console.log(`[DEBUG] Betting continues - notifying next player`);
+          logger.debug('Betting continues - notifying next player', { roomId });
           // ベッティング継続中: 次のプレイヤーにターン通知
           const nextBettorId = round.getCurrentBettorId();
-          console.log(`[DEBUG] Emitting turnNotification to: ${nextBettorId}`);
+          logger.debug('Emitting turnNotification', { roomId, playerId: nextBettorId });
           io.to(roomId).emit('turnNotification', {
             playerId: nextBettorId,
             currentBet: round.getPlayerBet(nextBettorId),
             playerBets: round.getAllPlayerBets(),
             validActions: round.getValidActions(nextBettorId),
           });
+
+          // Start turn timer for next player
+          turnTimerManager.startTimer(roomId, nextBettorId, () => {
+            try {
+              gameManager.executePlayerAction(roomId, nextBettorId, 'fold');
+              io.to(roomId).emit('playerTimeout', { playerId: nextBettorId });
+            } catch (e) {
+              logger.error('Auto-fold error', e instanceof Error ? e : undefined, { playerId: nextBettorId });
+            }
+          }, (remaining, isWarning) => {
+            io.to(roomId).emit('timerUpdate', { playerId: nextBettorId, remaining, warning: isWarning });
+          });
         }
 
-        console.log(`[INFO] Action completed - ${playerId}: ${action.type}`);
+        logger.info('Action completed', { roomId, playerId, action: action.type });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to execute action';
         socket.emit('error', { message, code: 'ACTION_ERROR' });
-        console.error(`[ERROR] Unexpected error: ${message}`);
+        logger.error('Unexpected error', error instanceof Error ? error : undefined, { message });
       }
     });
 
@@ -405,7 +484,89 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
     // 切断
     socket.on('disconnect', () => {
-      console.log(`Client disconnected: ${socket.id}`);
+      const playerId = socket.playerId;
+      const roomId = socket.roomId;
+
+      logger.logConnection(socket.id, playerId, undefined, false);
+
+      if (playerId) {
+        // lastSeen更新のみ（socketIdは更新しない）
+        const session = sessionManager.getSession(playerId);
+        if (session) {
+          session.lastSeen = Date.now();
+        }
+
+        // Emit playerDisconnected to room
+        if (roomId) {
+          io.to(roomId).emit('playerDisconnected', { playerId });
+        }
+
+        // Start grace period timer for auto-fold if not reconnected
+        setTimeout(() => {
+          if (!sessionManager.isSessionValid(playerId)) {
+            // Session expired, auto-fold
+            try {
+              if (roomId) {
+                gameManager.executePlayerAction(roomId, playerId, 'fold');
+                io.to(roomId).emit('playerAutoFolded', { playerId });
+                logger.info('Player auto-folded after grace period', { playerId, roomId });
+              }
+            } catch (e) {
+              logger.error('Auto-fold error on disconnect', e instanceof Error ? e : undefined, { playerId });
+            }
+          }
+        }, TIMEOUT_CONSTANTS.GRACE_PERIOD);
+      }
+    });
+
+    // Reconnection handler
+    socket.on('reconnectRequest', (data: { playerId: string; roomId: string }) => {
+      try {
+        const { playerId, roomId } = data;
+        const success = sessionManager.reconnect(playerId, socket.id);
+
+        if (success) {
+          // Socket情報を復元
+          socket.playerId = playerId;
+          socket.roomId = roomId;
+          socket.join(roomId);
+
+          // 再接続成功を通知
+          io.to(roomId).emit('playerReconnected', { playerId });
+          logger.info('Player reconnected', { playerId, roomId });
+
+          // 現在のゲーム状態を送信
+          const room = gameManager.getRoom(roomId);
+          const round = gameManager.getActiveRound(roomId);
+
+          if (room && round) {
+            socket.emit('gameState', {
+              roomId,
+              players: room.players.map((p) => ({
+                id: p.id,
+                name: p.name,
+                chips: p.chips,
+                seat: p.seat,
+              })),
+              communityCards: round.getCommunityCards(),
+              pot: round.getPot(),
+              currentBettorId: round.getCurrentBettorId(),
+              playerBets: round.getAllPlayerBets(),
+              hand: round.getPlayerHand(playerId),
+            });
+          }
+        } else {
+          socket.emit('error', {
+            message: 'Reconnection failed - grace period expired',
+            code: 'RECONNECT_FAILED',
+          });
+          logger.warn('Reconnection failed', { playerId, roomId });
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Reconnection error';
+        socket.emit('error', { message, code: 'RECONNECT_FAILED' });
+        logger.error('Reconnection error', error instanceof Error ? error : undefined);
+      }
     });
   });
 };

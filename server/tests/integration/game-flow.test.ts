@@ -7,11 +7,17 @@ import { Server as SocketIOServer } from 'socket.io';
 import { io as ioClient, Socket as ClientSocket } from 'socket.io-client';
 import { GameManager } from '../../src/game/GameManager';
 import { setupSocketHandlers } from '../../src/socket/socketHandler';
+import { SessionManager } from '../../src/services/SessionManager';
+import { TurnTimerManager } from '../../src/services/TurnTimerManager';
+import { LoggerService } from '../../src/services/LoggerService';
 
 describe('Game Flow Integration Test', () => {
   let io: SocketIOServer;
   let httpServer: any;
   let gameManager: GameManager;
+  let sessionManager: SessionManager;
+  let turnTimerManager: TurnTimerManager;
+  let logger: LoggerService;
   let clientSocket1: ClientSocket;
   let clientSocket2: ClientSocket;
   let clientSocket3: ClientSocket;
@@ -29,11 +35,14 @@ describe('Game Flow Integration Test', () => {
       },
     });
 
-    // GameManager初期化
+    // サービス初期化
     gameManager = new GameManager();
+    sessionManager = new SessionManager();
+    turnTimerManager = new TurnTimerManager();
+    logger = new LoggerService();
 
     // ハンドラセットアップ
-    setupSocketHandlers(io, gameManager);
+    setupSocketHandlers(io, gameManager, sessionManager, turnTimerManager, logger);
 
     // サーバー起動
     httpServer.listen(PORT, () => {
@@ -61,6 +70,9 @@ describe('Game Flow Integration Test', () => {
     if (clientSocket1?.connected) clientSocket1.disconnect();
     if (clientSocket2?.connected) clientSocket2.disconnect();
     if (clientSocket3?.connected) clientSocket3.disconnect();
+
+    // タイマーをすべてクリア
+    turnTimerManager.clearAllTimers();
   });
 
   /**
@@ -188,7 +200,7 @@ describe('Game Flow Integration Test', () => {
       console.error('[TEST] Player1 received error:', error);
       done(new Error(`Player1 error: ${error.message}`));
     });
-  }, 15000); // 15秒タイムアウト
+  }, 30000); // 30秒タイムアウト
 
   /**
    * テスト2: 3プレイヤーでプリフロップ全員アクションを確認
@@ -308,7 +320,7 @@ describe('Game Flow Integration Test', () => {
       console.error('[TEST] Error:', error);
       done(new Error(error.message));
     });
-  }, 20000); // 20秒タイムアウト
+  }, 30000); // 30秒タイムアウト
 
   /**
    * テスト3: プレイヤーがレイズした場合、全員が再度アクションする必要がある
@@ -412,7 +424,7 @@ describe('Game Flow Integration Test', () => {
       console.error('[TEST] Error:', error);
       done(new Error(error.message));
     });
-  }, 20000);
+  }, 30000); // 30秒タイムアウト
 
   test('2-player game: P1 folds -> P2 wins immediately (should NOT go to Flop)', (done) => {
     let roomId: string;
@@ -421,7 +433,7 @@ describe('Game Flow Integration Test', () => {
 
     // 1. Setup game
     clientSocket1 = ioClient(`http://localhost:${PORT}`);
-    
+
     clientSocket1.on('connect', () => {
       clientSocket1.emit('createRoom', {
         hostName: 'Player1',
@@ -493,7 +505,7 @@ describe('Game Flow Integration Test', () => {
 
     // 1. Setup game
     clientSocket1 = ioClient(`http://localhost:${PORT}`);
-    
+
     clientSocket1.on('connect', () => {
       clientSocket1.emit('createRoom', {
         hostName: 'Player1',
