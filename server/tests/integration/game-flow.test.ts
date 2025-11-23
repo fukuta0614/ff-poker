@@ -413,4 +413,145 @@ describe('Game Flow Integration Test', () => {
       done(new Error(error.message));
     });
   }, 20000);
+
+  test('2-player game: P1 folds -> P2 wins immediately (should NOT go to Flop)', (done) => {
+    let roomId: string;
+    let player1Id: string;
+    let player2Id: string;
+
+    // 1. Setup game
+    clientSocket1 = ioClient(`http://localhost:${PORT}`);
+    
+    clientSocket1.on('connect', () => {
+      clientSocket1.emit('createRoom', {
+        hostName: 'Player1',
+        smallBlind: 10,
+        bigBlind: 20,
+      });
+    });
+
+    clientSocket1.on('roomCreated', (data: { roomId: string; playerId: string }) => {
+      roomId = data.roomId;
+      player1Id = data.playerId;
+
+      clientSocket2 = ioClient(`http://localhost:${PORT}`);
+      clientSocket2.on('connect', () => {
+        clientSocket2.emit('joinRoom', {
+          roomId: roomId,
+          playerName: 'Player2',
+        });
+      });
+
+      clientSocket2.on('joinedRoom', (data: any) => {
+        player2Id = data.playerId;
+        setTimeout(() => {
+          clientSocket1.emit('startGame', { roomId });
+        }, 100);
+      });
+
+      // Monitor game state
+      clientSocket1.on('gameStarted', () => {
+        // Wait for turn notification
+      });
+
+      clientSocket1.on('turnNotification', (data: any) => {
+        // 2-player preflop: SB (Player 1) acts first
+        if (data.playerId === player1Id) {
+          setTimeout(() => {
+            console.log('[TEST] Player1 folding...');
+            clientSocket1.emit('action', {
+              playerId: player1Id,
+              action: { type: 'fold', amount: 0 }
+            });
+          }, 100);
+        }
+      });
+
+      // If we receive 'newStreet', it's a BUG (should be showdown/game end)
+      clientSocket1.on('newStreet', (data: any) => {
+        done(new Error('Bug reproduced: Game advanced to new street instead of ending!'));
+      });
+
+      // If we receive 'showdown', it's FIXED
+      clientSocket1.on('showdown', (data: any) => {
+        try {
+          expect(data.players.length).toBe(2);
+          console.log('[TEST] Showdown received (Win by Fold verified)');
+          done();
+        } catch (e) {
+          done(e);
+        }
+      });
+    });
+  }, 10000);
+
+  test('Multi-round: Complete one hand -> automatically start next hand', (done) => {
+    let roomId: string;
+    let player1Id: string;
+    let player2Id: string;
+    let handCount = 0;
+
+    // 1. Setup game
+    clientSocket1 = ioClient(`http://localhost:${PORT}`);
+    
+    clientSocket1.on('connect', () => {
+      clientSocket1.emit('createRoom', {
+        hostName: 'Player1',
+        smallBlind: 10,
+        bigBlind: 20,
+      });
+    });
+
+    clientSocket1.on('roomCreated', (data: { roomId: string; playerId: string }) => {
+      roomId = data.roomId;
+      player1Id = data.playerId;
+
+      clientSocket2 = ioClient(`http://localhost:${PORT}`);
+      clientSocket2.on('connect', () => {
+        clientSocket2.emit('joinRoom', {
+          roomId: roomId,
+          playerName: 'Player2',
+        });
+      });
+
+      clientSocket2.on('joinedRoom', (data: any) => {
+        player2Id = data.playerId;
+        setTimeout(() => {
+          clientSocket1.emit('startGame', { roomId });
+        }, 100);
+      });
+    });
+
+    // Count hands dealt
+    clientSocket1.on('dealHand', (data: any) => {
+      handCount++;
+      console.log(`[TEST] Player1 received hand #${handCount}`);
+      if (handCount === 2) {
+        // Second hand dealt - test passed!
+        console.log('[TEST] Second hand confirmed, test complete');
+        done();
+      }
+    });
+
+    // Player1 folds immediately to trigger win-by-fold showdown
+    clientSocket1.on('turnNotification', (data: any) => {
+      if (handCount === 1 && data.playerId === player1Id) {
+        setTimeout(() => {
+          console.log('[TEST] Player1 folding to trigger showdown...');
+          clientSocket1.emit('action', {
+            playerId: player1Id,
+            action: { type: 'fold', amount: 0 }
+          });
+        }, 100);
+      }
+    });
+
+    // Monitor showdown
+    let showdownCount = 0;
+    clientSocket1.on('showdown', (data: any) => {
+      showdownCount++;
+      console.log(`[TEST] Showdown #${showdownCount} occurred, waiting for next round...`);
+      expect(data.players.length).toBe(2);
+    });
+  }, 15000); // 15s timeout for multi-round
 });

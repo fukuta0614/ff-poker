@@ -14,7 +14,10 @@ export const Lobby: React.FC = () => {
   const { setRoomId, setPlayerId, setPlayers } = useGame();
   const navigate = useNavigate();
 
-  const [playerName, setPlayerName] = useState('');
+  const [playerName, setPlayerName] = useState(() => {
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    return `player_${randomSuffix}`;
+  });
   const [roomIdInput, setRoomIdInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
