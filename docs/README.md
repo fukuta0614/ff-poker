@@ -9,6 +9,7 @@ docs/
 ├── README.md                    # このファイル
 ├── tech-stack.md                # 技術スタック定義
 ├── texas-holdem-rules.md        # テキサスホールデムルール
+├── testing-guide.md             # テストガイド（ユニット/統合/E2E）
 ├── deployment.md                # デプロイメント手順
 ├── dev-notes.md                 # 開発メモ（技術的な問題と解決策）
 ├── design/                      # 設計文書
@@ -25,6 +26,7 @@ docs/
 │   ├── milestone-b-user-stories.md         # マイルストーンB ユーザーストーリー
 │   └── milestone-b-acceptance-criteria.md  # マイルストーンB 受入基準
 └── archive/                     # 古いドキュメント（参照用）
+    ├── README.md
     ├── fix-plan.md              # 旧：ゲームロジック修正計画
     ├── bug-report.md            # 旧：バグレポート
     └── test-design.md           # 旧：テスト設計書
@@ -36,6 +38,7 @@ docs/
 
 - **[技術スタック](./tech-stack.md)** - 使用技術とツールの一覧
 - **[テキサスホールデムルール](./texas-holdem-rules.md)** - ゲームルール解説
+- **[テストガイド](./testing-guide.md)** - ユニット/統合/E2Eテストの説明と実践方法
 - **[デプロイメント](./deployment.md)** - Netlify/Renderへのデプロイ手順
 - **[開発メモ](./dev-notes.md)** - 開発中の技術的問題と解決策
 
