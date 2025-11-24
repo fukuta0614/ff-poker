@@ -4,6 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import { GameManager } from '../game/GameManager';
+import { DebugLogger } from '../services/DebugLogger';
 
 export const createRoutes = (gameManager: GameManager): Router => {
   const router = Router();
@@ -60,6 +61,32 @@ export const createRoutes = (gameManager: GameManager): Router => {
       res.json({ rooms });
     } catch (error) {
       console.error('Error listing rooms:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // デバッグログ取得
+  router.get('/debug/logs', async (_req: Request, res: Response) => {
+    try {
+      const debugLogger = new DebugLogger();
+      const logs = await debugLogger.readLogs();
+
+      res.json({ logs });
+    } catch (error) {
+      console.error('Error fetching debug logs:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // デバッグログクリア
+  router.delete('/debug/logs', async (_req: Request, res: Response) => {
+    try {
+      const debugLogger = new DebugLogger();
+      await debugLogger.clearLogs();
+
+      res.json({ success: true, message: 'Debug logs cleared' });
+    } catch (error) {
+      console.error('Error clearing debug logs:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });

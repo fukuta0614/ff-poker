@@ -7,12 +7,19 @@ import { Server as SocketIOServer } from 'socket.io';
 import app from './app';
 import { GameManager } from './game/GameManager';
 import { setupSocketHandlers } from './socket/socketHandler';
+import { DebugLogger } from './services/DebugLogger';
 
 const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 // GameManagerの初期化
 const gameManager = new GameManager();
+
+// DebugLoggerの初期化
+const debugLogger = new DebugLogger();
+debugLogger.initialize().catch(err => {
+  console.error('Failed to initialize DebugLogger:', err);
+});
 
 // HTTPサーバーの作成
 const httpServer = createServer(app(gameManager));
@@ -27,7 +34,7 @@ const io = new SocketIOServer(httpServer, {
 });
 
 // Socket.ioハンドラのセットアップ
-setupSocketHandlers(io, gameManager);
+setupSocketHandlers(io, gameManager, debugLogger);
 
 // サーバー起動
 httpServer.listen(PORT, () => {

@@ -4,6 +4,7 @@
 
 import { Server, Socket } from 'socket.io';
 import { GameManager } from '../game/GameManager';
+import { DebugLogger } from '../services/DebugLogger';
 import {
   JoinRoomData,
   StartGameData,
@@ -11,13 +12,16 @@ import {
   ChatMessageData,
 } from '../types/socket';
 
-export const setupSocketHandlers = (io: Server, gameManager: GameManager): void => {
+export const setupSocketHandlers = (io: Server, gameManager: GameManager, debugLogger: DebugLogger): void => {
   io.on('connection', (socket: Socket) => {
     console.log(`Client connected: ${socket.id}`);
 
     // ルーム作成（簡易版）
-    socket.on('createRoom', (data: { hostName: string; smallBlind: number; bigBlind: number }) => {
+    socket.on('createRoom', async (data: { hostName: string; smallBlind: number; bigBlind: number }) => {
       try {
+        // ログ記録: ルーム作成リクエスト
+        await debugLogger.logProcessingResult(`Room creation requested by ${data.hostName}`, 'DEBUG');
+
         const room = gameManager.createRoom(data.hostName, data.smallBlind, data.bigBlind);
 
         socket.emit('roomCreated', {
@@ -25,15 +29,26 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
           hostId: room.hostId,
         });
 
+        // ログ記録: ルーム作成成功
+        await debugLogger.logProcessingResult(`Room created: ${room.id} by ${data.hostName}`);
+
         console.log(`Room created: ${room.id}`);
       } catch (error) {
+        const message = error instanceof Error ? error.message : 'Failed to create room';
+        await debugLogger.logError(new Error(message), 'Room creation failed');
         socket.emit('error', { message: 'Failed to create room', code: 'CREATE_ROOM_ERROR' });
       }
     });
 
     // ルーム参加
-    socket.on('joinRoom', (data: JoinRoomData) => {
+    socket.on('joinRoom', async (data: JoinRoomData) => {
       try {
+        // ログ記録
+        await debugLogger.logSocketEvent('joinRoom', {
+          playerId: data.playerName, // プレイヤーIDはまだ割り当てられていない
+          roomId: data.roomId,
+        });
+
         const room = gameManager.getRoom(data.roomId);
         if (!room) {
           socket.emit('error', { message: 'Room not found', code: 'ROOM_NOT_FOUND' });
@@ -41,6 +56,9 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
         }
 
         const player = gameManager.addPlayer(data.roomId, data.playerName);
+
+        // ログ記録: プレイヤー追加成功
+        await debugLogger.logProcessingResult(`Player ${data.playerName} joined room ${data.roomId}`);
 
         // socketをルームに参加させる
         socket.join(data.roomId);
@@ -78,9 +96,17 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
     });
 
     // ゲーム開始
-    socket.on('startGame', (data: StartGameData) => {
+    socket.on('startGame', async (data: StartGameData) => {
       try {
+        // ログ記録
+        await debugLogger.logSocketEvent('startGame', {
+          roomId: data.roomId,
+        });
+
         gameManager.startGame(data.roomId);
+
+        // ログ記録: ゲーム開始成功
+        await debugLogger.logProcessingResult(`Game started in room ${data.roomId}`);
 
         const room = gameManager.getRoom(data.roomId);
         const round = gameManager.getActiveRound(data.roomId);
@@ -139,10 +165,17 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
     });
 
     // プレイヤーアクション
-    socket.on('action', (data: ActionData) => {
+    socket.on('action', async (data: ActionData) => {
       try {
         const { playerId, action } = data;
         const roomId = (socket as any).roomId;
+
+        // ログ記録
+        await debugLogger.logSocketEvent('action', {
+          playerId,
+          action: action.type,
+          amount: action.amount,
+        });
 
         console.log(`[DEBUG] action received - playerId: ${playerId}, action: ${action.type}, amount: ${action.amount}`);
 
@@ -166,9 +199,16 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
 
         try {
           gameManager.executePlayerAction(roomId, playerId, actionType, action.amount);
+
+          // ログ記録: アクション成功
+          await debugLogger.logProcessingResult(`Action processed: Player ${playerId} ${actionType}${action.amount ? ` ${action.amount}` : ''}`);
         } catch (actionError) {
           // アクションエラーを個別に処理
           const message = actionError instanceof Error ? actionError.message : 'Invalid action';
+
+          // ログ記録: エラー
+          await debugLogger.logError(new Error(message), `Player ${playerId} action failed`);
+
           socket.emit('error', { message, code: 'ACTION_ERROR' });
           console.error(`[ERROR] Action error from ${playerId}: ${message}`);
           return;
@@ -250,7 +290,13 @@ export const setupSocketHandlers = (io: Server, gameManager: GameManager): void 
     });
 
     // チャットメッセージ
-    socket.on('chatMessage', (data: ChatMessageData) => {
+    socket.on('chatMessage', async (data: ChatMessageData) => {
+      // ログ記録
+      await debugLogger.logSocketEvent('chatMessage', {
+        playerId: data.playerId,
+        roomId: data.roomId,
+      });
+
       io.to(data.roomId).emit('chatMessage', {
         playerId: data.playerId,
         text: data.text,

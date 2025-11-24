@@ -8,6 +8,7 @@ import { useSocket } from '../contexts/SocketContext';
 import { useGame } from '../contexts/GameContext';
 import type { Player } from '../contexts/GameContext';
 import { useNavigate } from 'react-router-dom';
+import { DebugLogViewer } from './DebugLogViewer';
 
 export const Lobby: React.FC = () => {
   const { socket, connected } = useSocket();
@@ -18,6 +19,7 @@ export const Lobby: React.FC = () => {
   const [roomIdInput, setRoomIdInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showDebugLogs, setShowDebugLogs] = useState(false);
 
   const handleCreateRoom = () => {
     if (!socket || !playerName.trim()) {
@@ -89,7 +91,23 @@ export const Lobby: React.FC = () => {
 
   return (
     <div style={{ padding: '20px', maxWidth: '500px', margin: '0 auto' }}>
-      <h1>FF Poker</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1>FF Poker</h1>
+        <button
+          onClick={() => setShowDebugLogs(true)}
+          style={{
+            padding: '8px 16px',
+            fontSize: '14px',
+            cursor: 'pointer',
+            backgroundColor: '#9c27b0',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+          }}
+        >
+          🐛 Debug Logs
+        </button>
+      </div>
 
       <div style={{ marginBottom: '20px' }}>
         <p>Status: {connected ? '🟢 Connected' : '🔴 Disconnected'}</p>
@@ -165,6 +183,8 @@ export const Lobby: React.FC = () => {
           {loading ? 'Joining...' : 'Join Room'}
         </button>
       </div>
+
+      {showDebugLogs && <DebugLogViewer onClose={() => setShowDebugLogs(false)} />}
     </div>
   );
 };
