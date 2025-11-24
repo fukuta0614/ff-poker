@@ -6,7 +6,7 @@ import { Router, Request, Response } from 'express';
 import { GameManager } from '../game/GameManager';
 import { DebugLogger } from '../services/DebugLogger';
 
-export const createRoutes = (gameManager: GameManager): Router => {
+export const createRoutes = (gameManager: GameManager, debugLogger: DebugLogger): Router => {
   const router = Router();
 
   // ルーム作成
@@ -68,7 +68,6 @@ export const createRoutes = (gameManager: GameManager): Router => {
   // デバッグログ取得
   router.get('/debug/logs', async (_req: Request, res: Response) => {
     try {
-      const debugLogger = new DebugLogger();
       const logs = await debugLogger.readLogs();
 
       res.json({ logs });
@@ -81,7 +80,6 @@ export const createRoutes = (gameManager: GameManager): Router => {
   // デバッグログクリア
   router.delete('/debug/logs', async (_req: Request, res: Response) => {
     try {
-      const debugLogger = new DebugLogger();
       await debugLogger.clearLogs();
 
       res.json({ success: true, message: 'Debug logs cleared' });

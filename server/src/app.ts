@@ -6,12 +6,13 @@ import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { GameManager } from './game/GameManager';
+import { DebugLogger } from './services/DebugLogger';
 import { createRoutes } from './api/routes';
 
 // 環境変数の読み込み
 dotenv.config();
 
-export default function createApp(gameManager: GameManager): Application {
+export default function createApp(gameManager: GameManager, debugLogger: DebugLogger): Application {
   const app: Application = express();
 
   // ミドルウェア
@@ -31,7 +32,7 @@ export default function createApp(gameManager: GameManager): Application {
   });
 
   // APIルーティング
-  const apiRoutes = createRoutes(gameManager);
+  const apiRoutes = createRoutes(gameManager, debugLogger);
   app.use('/api', apiRoutes);
 
   return app;

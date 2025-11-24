@@ -22,7 +22,7 @@ debugLogger.initialize().catch(err => {
 });
 
 // HTTPサーバーの作成
-const httpServer = createServer(app(gameManager));
+const httpServer = createServer(app(gameManager, debugLogger));
 
 // Socket.IOサーバーの作成
 const io = new SocketIOServer(httpServer, {

@@ -39,7 +39,7 @@ export interface LogEntry {
   message: string;
 
   /** 追加のメタデータ (オプション) */
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -91,7 +91,7 @@ export interface LoggableSocketData {
   amount?: number;
 
   /** その他のデータ */
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // =============================================================================
@@ -138,7 +138,7 @@ export interface IDebugLogger {
    *
    * 【信頼性レベル】: 🔵 要件REQ-002,REQ-105~107より
    */
-  logSocketEvent(eventName: SocketEventName, data: any): Promise<void>;
+  logSocketEvent(eventName: SocketEventName, data: LoggableSocketData): Promise<void>;
 
   /**
    * 処理結果をログに記録する

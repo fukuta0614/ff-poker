@@ -14,6 +14,7 @@ import type {
   SocketEventName,
   LogLevel,
   LogEntry,
+  LoggableSocketData,
   DEFAULT_LOG_PATH,
 } from '../types/debugLog';
 
@@ -81,7 +82,7 @@ export class DebugLogger implements IDebugLogger {
    * @param eventName - イベント名
    * @param data - イベントデータ
    */
-  async logSocketEvent(eventName: SocketEventName, data: any): Promise<void> {
+  async logSocketEvent(eventName: SocketEventName, data: LoggableSocketData): Promise<void> {
     if (!this.isEnabled) {
       return;
     }
@@ -197,7 +198,7 @@ export class DebugLogger implements IDebugLogger {
    * @param data - イベントデータ
    * @returns フォーマット済みメッセージ
    */
-  private formatSocketEvent(eventName: SocketEventName, data: any): string {
+  private formatSocketEvent(eventName: SocketEventName, data: LoggableSocketData): string {
     const parts: string[] = [`Socket event received: ${eventName}`];
 
     if (data.playerId) {
