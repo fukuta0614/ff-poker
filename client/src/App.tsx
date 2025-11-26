@@ -12,14 +12,15 @@ import './App.css';
 function App() {
   return (
     <BrowserRouter>
-      <SocketProvider>
-        <GameProvider>
+      <GameProvider>
+        <SocketProvider>
           <Routes>
             <Route path="/" element={<Lobby />} />
+            <Route path="/lobby" element={<Lobby />} />
             <Route path="/room/:roomId" element={<Room />} />
           </Routes>
-        </GameProvider>
-      </SocketProvider>
+        </SocketProvider>
+      </GameProvider>
     </BrowserRouter>
   );
 }

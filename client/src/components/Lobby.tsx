@@ -42,6 +42,10 @@ export const Lobby: React.FC = () => {
       setRoomId(data.roomId);
       setPlayerId(data.playerId); // hostIdではなくplayerIdを使用
 
+      // localStorageに保存（再接続用）
+      localStorage.setItem('playerId', data.playerId);
+      localStorage.setItem('roomId', data.roomId);
+
       // ホストはすでにプレイヤーとして追加されているので、プレイヤーリストを更新
       setPlayers([{
         id: data.playerId,
@@ -78,6 +82,11 @@ export const Lobby: React.FC = () => {
       console.log('Joined room:', data);
       setRoomId(data.roomId);
       setPlayerId(data.playerId);
+
+      // localStorageに保存（再接続用）
+      localStorage.setItem('playerId', data.playerId);
+      localStorage.setItem('roomId', data.roomId);
+
       setPlayers(data.players);
       setLoading(false);
       navigate(`/room/${data.roomId}`);

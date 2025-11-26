@@ -56,7 +56,12 @@
   },
   "hooks": {
     "userPromptSubmit": [],
-    "preToolCall": [],
+    "preToolCall": [
+      {
+        "command": "if echo \"$TOOL_INPUT\" | grep -q '\"run_in_background\":\\s*true'; then echo 'Error: run_in_background is not allowed. Please start dev servers manually in VSCode terminal.' && exit 1; fi",
+        "continueOnError": false
+      }
+    ],
     "postToolCall": []
   }
 }

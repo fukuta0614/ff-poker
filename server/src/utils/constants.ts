@@ -17,9 +17,10 @@ export const CLEANUP_INTERVAL = 30000; // 30秒
 
 /**
  * タイムアウト関連定数（マイルストーンB）
+ * TEST_GRACE_PERIOD環境変数が設定されている場合はそちらを優先
  */
 export const TIMEOUT_CONSTANTS = {
-  GRACE_PERIOD: 120000,
+  GRACE_PERIOD: process.env.TEST_GRACE_PERIOD ? parseInt(process.env.TEST_GRACE_PERIOD, 10) : 120000,
   TURN_TIMEOUT: 60000,
   WARNING_THRESHOLD: 10000,
   TIMER_UPDATE_INTERVAL: 1000,

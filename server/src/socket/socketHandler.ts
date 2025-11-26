@@ -369,21 +369,40 @@ export const setupSocketHandlers = (
           const room = gameManager.getRoom(roomId);
           const round = gameManager.getActiveRound(roomId);
 
-          if (room && round) {
-            socket.emit('gameState', {
-              roomId,
-              players: room.players.map((p) => ({
-                id: p.id,
-                name: p.name,
-                chips: p.chips,
-                seat: p.seat,
-              })),
-              communityCards: round.getCommunityCards(),
-              pot: round.getPot(),
-              currentBettorId: round.getCurrentBettorId(),
-              playerBets: round.getAllPlayerBets(),
-              hand: round.getPlayerHand(playerId),
-            });
+          if (room) {
+            // ゲーム開始済みの場合は完全な状態を送信
+            if (round) {
+              socket.emit('gameState', {
+                roomId,
+                players: room.players.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  chips: p.chips,
+                  seat: p.seat,
+                })),
+                communityCards: round.getCommunityCards(),
+                pot: round.getPot(),
+                currentBettorId: round.getCurrentBettorId(),
+                playerBets: round.getAllPlayerBets(),
+                hand: round.getPlayerHand(playerId),
+              });
+            } else {
+              // ゲーム未開始の場合は基本情報のみ送信
+              socket.emit('gameState', {
+                roomId,
+                players: room.players.map((p) => ({
+                  id: p.id,
+                  name: p.name,
+                  chips: p.chips,
+                  seat: p.seat,
+                })),
+                communityCards: [],
+                pot: 0,
+                currentBettorId: '',
+                playerBets: {},
+                hand: null,
+              });
+            }
           }
         } else {
           socket.emit('error', {
