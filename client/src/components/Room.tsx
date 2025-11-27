@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useSocket } from '../contexts/SocketContext';
 import { useGame } from '../contexts/GameContext';
+import { Card } from './Card';
 
 export const Room: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -217,8 +218,9 @@ export const Room: React.FC = () => {
           {gameState.myHand && (
             <div style={{ marginBottom: '20px' }}>
               <h3>Your Hand</h3>
-              <div style={{ fontSize: '24px' }}>
-                {gameState.myHand[0]} {gameState.myHand[1]}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Card notation={gameState.myHand[0]} width={80} />
+                <Card notation={gameState.myHand[1]} width={80} />
               </div>
             </div>
           )}
@@ -226,8 +228,10 @@ export const Room: React.FC = () => {
           {gameState.communityCards.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
               <h3>Community Cards</h3>
-              <div style={{ fontSize: '24px' }}>
-                {gameState.communityCards.join(' ')}
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {gameState.communityCards.map((card, index) => (
+                  <Card key={index} notation={card} width={80} />
+                ))}
               </div>
             </div>
           )}
