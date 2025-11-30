@@ -40,6 +40,15 @@ export const initializeRound = (
     });
   }
 
+  // Validate dealerIndex
+  if (dealerIndex < 0 || dealerIndex >= players.length) {
+    return E.left({
+      type: 'InvalidAction',
+      action: 'raise',
+      reason: `Invalid dealer index: ${dealerIndex}. Must be between 0 and ${players.length - 1}`,
+    });
+  }
+
   // 1. デッキを作成してシャッフル
   const deck = shuffleDeck(createDeck());
 
@@ -220,7 +229,8 @@ export const dealHoleCards = (
   const playerStates = new Map<PlayerId, PlayerState>();
   let currentDeck = deck;
 
-  players.forEach((player) => {
+  // Use for-of loop instead of forEach to properly propagate errors
+  for (const player of players.values()) {
     try {
       const { dealtCards, remainingDeck } = dealCards(currentDeck, HOLE_CARD_COUNT);
 
@@ -241,7 +251,7 @@ export const dealHoleCards = (
         available: currentDeck.length,
       });
     }
-  });
+  }
 
   return E.right({
     playerStates,

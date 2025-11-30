@@ -99,8 +99,17 @@ export function determineWinners(
     const amountPerWinner = Math.floor(pot.amount / winners.length);
     const remainder = pot.amount % winners.length;
 
-    winners.forEach((winner, index) => {
-      // 余りは最初の勝者に配分（シート順で決定するのが一般的だが、ここでは単純に最初）
+    // 余りの配分: ポーカールールに従い、ディーラーボタンに最も近い位置(最も早いシート)のプレイヤーに配分
+    // シート順でソート
+    const sortedWinners = [...winners].sort((a, b) => {
+      const playerA = state.players.get(a.playerId);
+      const playerB = state.players.get(b.playerId);
+      if (!playerA || !playerB) return 0;
+      return playerA.seat - playerB.seat;
+    });
+
+    sortedWinners.forEach((winner, index) => {
+      // 余りは最初の勝者(最も早いシート)に配分
       const amount = index === 0 ? amountPerWinner + remainder : amountPerWinner;
 
       allWinners.push({
@@ -161,7 +170,7 @@ export function performShowdown(
   state: GameState
 ): E.Either<GameError, ShowdownResult> {
   // ステージチェック
-  if (state.stage !== 'showdown' && state.stage !== 'ended') {
+  if (state.stage !== 'showdown') {
     return E.left({
       type: 'InvalidStage',
       expected: 'showdown',
