@@ -13,6 +13,26 @@ export type ActionType = 'fold' | 'check' | 'call' | 'raise' | 'allin';
 
 export type Stage = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'ended';
 
+// --- 乱数生成器型 ---
+
+/**
+ * 乱数生成器の状態
+ * 線形合同法（LCG: Linear Congruential Generator）のシード値
+ * この状態から決定的に乱数列を生成できる
+ */
+export interface RNGState {
+  readonly seed: number;
+}
+
+/**
+ * 次の乱数生成結果
+ * 乱数値と次のRNG状態を含む
+ */
+export interface RNGResult {
+  readonly value: number; // 0以上1未満の乱数
+  readonly nextState: RNGState;
+}
+
 // --- プレイヤー型 ---
 
 export interface Player {
@@ -52,6 +72,7 @@ export interface GameState {
   readonly lastAggressorId: Option<PlayerId>;
   readonly pots: readonly Pot[];
   readonly totalPot: number;
+  readonly rngState: RNGState; // 乱数生成器の状態
 }
 
 // --- アクション型 ---

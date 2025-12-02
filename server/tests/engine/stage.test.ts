@@ -13,6 +13,7 @@ import {
 } from '../../src/engine/stage';
 import type { GameState, Player, PlayerState, PlayerId } from '../../src/engine/types';
 import { createDeck } from '../../src/engine/deck';
+import { createRNGState } from '../../src/engine/rng';
 
 // テスト用のヘルパー関数
 const createTestPlayer = (id: PlayerId, chips: number, seat: number): Player => ({
@@ -58,6 +59,7 @@ const createTestGameState = (
   lastAggressorId: O.none,
   pots: [],
   totalPot: 100,
+  rngState: createRNGState(12345),
 });
 
 describe('Stage Transitions', () => {
@@ -342,6 +344,7 @@ describe('Stage Transitions', () => {
       lastAggressorId: O.none,
       pots: [],
       totalPot: 40,
+      rngState: createRNGState(12345),
     });
 
     describe('dealFlop in heads-up', () => {
@@ -445,6 +448,7 @@ describe('Stage Transitions', () => {
       lastAggressorId: O.none,
       pots: [],
       totalPot: 60,
+      rngState: createRNGState(12345),
     });
 
     it('should set SB as first bettor on flop with dealer=0', () => {

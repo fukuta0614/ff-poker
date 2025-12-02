@@ -12,6 +12,7 @@ import type {
   PlayerState,
   PlayerId,
   Card,
+  RNGState,
 } from './types';
 import { createDeck, shuffleDeck, dealCards } from './deck';
 import {
@@ -24,13 +25,20 @@ import {
 } from './constants';
 
 /**
- * 新しいラウンドを初期化
+ * 新しいラウンドを初期化（純粋関数）
+ * @param players - プレイヤー配列
+ * @param dealerIndex - ディーラーのインデックス
+ * @param smallBlind - スモールブラインド額
+ * @param bigBlind - ビッグブラインド額
+ * @param rngState - 乱数生成器の初期状態
+ * @returns ゲーム状態またはエラー
  */
 export const initializeRound = (
   players: readonly Player[],
   dealerIndex: number,
   smallBlind: number,
-  bigBlind: number
+  bigBlind: number,
+  rngState: RNGState
 ): E.Either<GameError, GameState> => {
   if (players.length < MIN_PLAYERS) {
     return E.left({
@@ -50,7 +58,7 @@ export const initializeRound = (
   }
 
   // 1. デッキを作成してシャッフル
-  const deck = shuffleDeck(createDeck());
+  const { shuffledDeck: deck, nextRngState: deckRngState } = shuffleDeck(createDeck(), rngState);
 
   // 2. プレイヤーマップを作成
   const playersMap = new Map(players.map((p) => [p.id, p]));
@@ -112,6 +120,7 @@ export const initializeRound = (
     lastAggressorId: O.none,
     pots: [],
     totalPot,
+    rngState: deckRngState, // シャッフル後のRNG状態を保持
   });
 };
 

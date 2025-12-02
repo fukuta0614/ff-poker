@@ -10,6 +10,7 @@ import {
   determineWinners,
   distributeWinnings,
 } from '../../src/engine/showdown';
+import { createRNGState } from '../../src/engine/rng';
 import type { GameState, Player, PlayerState, Pot, WinnerInfo } from '../../src/engine/types';
 
 // テストヘルパー関数
@@ -57,6 +58,7 @@ function createTestGameState(overrides?: Partial<GameState>): GameState {
     lastAggressorId: O.none,
     pots: [],
     totalPot: 170,
+    rngState: createRNGState(12345),
     ...overrides,
   };
 }

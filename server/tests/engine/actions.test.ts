@@ -14,6 +14,7 @@ import {
   validateAction,
   processAction,
 } from '../../src/engine/actions';
+import { createRNGState } from '../../src/engine/rng';
 import type { GameState, Player, PlayerState, PlayerId, PlayerAction } from '../../src/engine/types';
 
 // テスト用のヘルパー関数
@@ -55,6 +56,7 @@ const createTestGameState = (
   lastAggressorId: O.none,
   pots: [],
   totalPot: 0,
+  rngState: createRNGState(12345),
 });
 
 describe('Action Functions', () => {

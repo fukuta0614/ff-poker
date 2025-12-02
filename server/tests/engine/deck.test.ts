@@ -9,6 +9,7 @@ import {
   dealCards,
   isValidCard,
 } from '../../src/engine/deck';
+import { createRNGState } from '../../src/engine/rng';
 import type { Card } from '../../src/engine/types';
 
 describe('Deck Functions', () => {
@@ -47,16 +48,18 @@ describe('Deck Functions', () => {
   describe('shuffleDeck', () => {
     it('should return a deck with 52 cards', () => {
       const deck = createDeck();
-      const shuffled = shuffleDeck(deck);
-      expect(shuffled.length).toBe(52);
+      const rngState = createRNGState(12345);
+      const result = shuffleDeck(deck, rngState);
+      expect(result.shuffledDeck.length).toBe(52);
     });
 
     it('should contain all the same cards', () => {
       const deck = createDeck();
-      const shuffled = shuffleDeck(deck);
+      const rngState = createRNGState(12345);
+      const result = shuffleDeck(deck, rngState);
 
       const originalSet = new Set(deck);
-      const shuffledSet = new Set(shuffled);
+      const shuffledSet = new Set(result.shuffledDeck);
 
       expect(shuffledSet.size).toBe(52);
       expect([...shuffledSet].every(card => originalSet.has(card))).toBe(true);
@@ -65,20 +68,44 @@ describe('Deck Functions', () => {
     it('should not mutate the original deck', () => {
       const deck = createDeck();
       const deckCopy = [...deck];
-      shuffleDeck(deck);
+      const rngState = createRNGState(12345);
+      shuffleDeck(deck, rngState);
 
       expect(deck).toEqual(deckCopy);
     });
 
-    it('should produce different order (statistically)', () => {
+    it('should produce same order with same RNG seed (deterministic)', () => {
       const deck = createDeck();
-      const shuffled1 = shuffleDeck(deck);
-      const shuffled2 = shuffleDeck(deck);
+      const rngState1 = createRNGState(12345);
+      const rngState2 = createRNGState(12345);
 
-      // 2回のシャッフルで完全に同じ順序になる確率は極めて低い
-      // (1/52! ≈ 1.2 × 10^-68)
-      const isDifferent = shuffled1.some((card, i) => card !== shuffled2[i]);
+      const result1 = shuffleDeck(deck, rngState1);
+      const result2 = shuffleDeck(deck, rngState2);
+
+      // 同じシードから同じ順序が生成される（純粋関数）
+      expect(result1.shuffledDeck).toEqual(result2.shuffledDeck);
+    });
+
+    it('should produce different order with different RNG seed', () => {
+      const deck = createDeck();
+      const rngState1 = createRNGState(12345);
+      const rngState2 = createRNGState(67890);
+
+      const result1 = shuffleDeck(deck, rngState1);
+      const result2 = shuffleDeck(deck, rngState2);
+
+      // 異なるシードから異なる順序が生成される
+      const isDifferent = result1.shuffledDeck.some((card, i) => card !== result2.shuffledDeck[i]);
       expect(isDifferent).toBe(true);
+    });
+
+    it('should return new RNG state', () => {
+      const deck = createDeck();
+      const rngState = createRNGState(12345);
+      const result = shuffleDeck(deck, rngState);
+
+      // RNG状態が更新される
+      expect(result.nextRngState.seed).not.toBe(rngState.seed);
     });
   });
 

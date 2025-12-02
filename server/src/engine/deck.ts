@@ -2,8 +2,9 @@
  * Deck関連の純粋関数
  */
 
-import type { Card } from './types';
+import type { Card, RNGState } from './types';
 import { RANKS, SUITS } from './constants';
+import { nextInt } from './rng';
 
 /**
  * 新しい52枚のカードデッキを生成
@@ -23,18 +24,34 @@ export const createDeck = (): readonly Card[] => {
 };
 
 /**
- * デッキをシャッフル（Fisher-Yates アルゴリズム）
- * 元のデッキは変更せず、新しいシャッフルされたデッキを返す
+ * デッキをシャッフル（Fisher-Yates アルゴリズム）- 純粋関数版
+ * 元のデッキは変更せず、新しいシャッフルされたデッキと次のRNG状態を返す
+ *
+ * @param deck - シャッフルするデッキ
+ * @param rngState - 乱数生成器の状態
+ * @returns シャッフルされたデッキと次のRNG状態
  */
-export const shuffleDeck = (deck: readonly Card[]): readonly Card[] => {
+export const shuffleDeck = (
+  deck: readonly Card[],
+  rngState: RNGState
+): { readonly shuffledDeck: readonly Card[]; readonly nextRngState: RNGState } => {
   const shuffled = [...deck];
+  let currentRngState = rngState;
 
+  // Fisher-Yatesアルゴリズム
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const result = nextInt(currentRngState, 0, i + 1);
+    const j = result.value;
+    currentRngState = result.nextState;
+
+    // スワップ
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
 
-  return shuffled;
+  return {
+    shuffledDeck: shuffled,
+    nextRngState: currentRngState,
+  };
 };
 
 /**

@@ -30,6 +30,10 @@ export type {
   ActionType,
   Stage,
 
+  // RNG型
+  RNGState,
+  RNGResult,
+
   // エンティティ型
   Player,
   PlayerState,
@@ -47,6 +51,15 @@ export type {
   ShowdownResult,
   GameConfig,
 } from './types';
+
+// RNG関数
+export {
+  createRNGState,
+  createRandomRNGState,
+  nextRandom,
+  nextInt,
+  randomChoice,
+} from './rng';
 
 // Deck関数
 export {

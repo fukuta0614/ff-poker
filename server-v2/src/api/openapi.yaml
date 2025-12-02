@@ -1,0 +1,453 @@
+openapi: 3.0.0
+info:
+  title: FF Poker API
+  version: 1.0.0
+  description: |
+    FF Poker の REST API 仕様
+    純粋関数型ゲームエンジンを使用したリアルタイムポーカーゲーム
+
+    ## 通信方式
+    - **REST API**: コマンド操作（ルーム作成、アクション実行等）
+    - **WebSocket**: リアルタイム通知（/ws エンドポイント）
+
+servers:
+  - url: http://localhost:3001/api/v1
+    description: 開発環境
+
+paths:
+  /rooms:
+    post:
+      summary: ルーム作成
+      operationId: createRoom
+      tags: [Rooms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRoomRequest'
+      responses:
+        '201':
+          description: ルーム作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateRoomResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /rooms/{roomId}:
+    get:
+      summary: ルーム情報取得
+      operationId: getRoom
+      tags: [Rooms]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      responses:
+        '200':
+          description: ルーム情報取得成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /rooms/{roomId}/join:
+    post:
+      summary: ルーム参加
+      operationId: joinRoom
+      tags: [Rooms]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinRoomRequest'
+      responses:
+        '200':
+          description: ルーム参加成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoinRoomResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /rooms/{roomId}/start:
+    post:
+      summary: ゲーム開始
+      operationId: startGame
+      tags: [Game]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      responses:
+        '200':
+          description: ゲーム開始成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameStateResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /rooms/{roomId}/actions:
+    post:
+      summary: プレイヤーアクション実行
+      operationId: executeAction
+      tags: [Game]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: アクション実行成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /rooms/{roomId}/state:
+    get:
+      summary: ゲーム状態取得
+      operationId: getGameState
+      tags: [Game]
+      parameters:
+        - $ref: '#/components/parameters/RoomId'
+        - name: playerId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: プレイヤーID（手札情報のフィルタリング用）
+      responses:
+        '200':
+          description: ゲーム状態取得成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GameStateResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    RoomId:
+      name: roomId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: ルームID
+
+  schemas:
+    CreateRoomRequest:
+      type: object
+      required:
+        - hostName
+        - smallBlind
+        - bigBlind
+      properties:
+        hostName:
+          type: string
+          minLength: 1
+          maxLength: 20
+          example: "Player1"
+        smallBlind:
+          type: number
+          minimum: 1
+          maximum: 1000
+          example: 10
+        bigBlind:
+          type: number
+          minimum: 2
+          maximum: 2000
+          example: 20
+
+    CreateRoomResponse:
+      type: object
+      required:
+        - roomId
+        - hostId
+      properties:
+        roomId:
+          type: string
+          example: "room-123abc"
+        hostId:
+          type: string
+          example: "player-456def"
+
+    RoomResponse:
+      type: object
+      required:
+        - id
+        - hostId
+        - players
+        - state
+        - smallBlind
+        - bigBlind
+      properties:
+        id:
+          type: string
+        hostId:
+          type: string
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerInfo'
+        state:
+          type: string
+          enum: [waiting, in_progress, ended]
+        smallBlind:
+          type: number
+        bigBlind:
+          type: number
+        dealerIndex:
+          type: number
+
+    JoinRoomRequest:
+      type: object
+      required:
+        - playerName
+      properties:
+        playerName:
+          type: string
+          minLength: 1
+          maxLength: 20
+          example: "Player2"
+
+    JoinRoomResponse:
+      type: object
+      required:
+        - roomId
+        - playerId
+        - players
+      properties:
+        roomId:
+          type: string
+        playerId:
+          type: string
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerInfo'
+
+    ActionRequest:
+      type: object
+      required:
+        - playerId
+        - action
+      properties:
+        playerId:
+          type: string
+          example: "player-123"
+        action:
+          type: object
+          required:
+            - type
+          properties:
+            type:
+              type: string
+              enum: [fold, check, call, raise, allin]
+              example: "raise"
+            amount:
+              type: number
+              minimum: 0
+              example: 50
+
+    ActionResponse:
+      type: object
+      required:
+        - success
+        - gameState
+      properties:
+        success:
+          type: boolean
+        gameState:
+          $ref: '#/components/schemas/GameState'
+        message:
+          type: string
+
+    GameStateResponse:
+      type: object
+      required:
+        - gameState
+      properties:
+        gameState:
+          $ref: '#/components/schemas/GameState'
+
+    GameState:
+      type: object
+      required:
+        - stage
+        - dealerIndex
+        - currentBettorIndex
+        - currentBet
+        - totalPot
+        - communityCards
+        - players
+      properties:
+        stage:
+          type: string
+          enum: [preflop, flop, turn, river, showdown, ended]
+          example: "preflop"
+        dealerIndex:
+          type: number
+          example: 0
+        currentBettorIndex:
+          type: number
+          example: 1
+        currentBet:
+          type: number
+          example: 20
+        minRaiseAmount:
+          type: number
+          example: 20
+        totalPot:
+          type: number
+          example: 30
+        communityCards:
+          type: array
+          items:
+            type: string
+          example: []
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlayerState'
+        pots:
+          type: array
+          items:
+            $ref: '#/components/schemas/Pot'
+
+    PlayerInfo:
+      type: object
+      required:
+        - id
+        - name
+        - chips
+        - seat
+      properties:
+        id:
+          type: string
+          example: "player-123"
+        name:
+          type: string
+          example: "Player1"
+        chips:
+          type: number
+          example: 1000
+        seat:
+          type: number
+          example: 0
+
+    PlayerState:
+      type: object
+      required:
+        - id
+        - name
+        - chips
+        - seat
+        - bet
+        - cumulativeBet
+        - isFolded
+        - hasActed
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        chips:
+          type: number
+        seat:
+          type: number
+        bet:
+          type: number
+          description: 現在のストリートのベット額
+        cumulativeBet:
+          type: number
+          description: 累積ベット額（全ストリート）
+        isFolded:
+          type: boolean
+        hasActed:
+          type: boolean
+        hand:
+          type: array
+          items:
+            type: string
+          minItems: 2
+          maxItems: 2
+          description: プレイヤー本人のみ取得可能
+          example: ["As", "Kh"]
+
+    Pot:
+      type: object
+      required:
+        - amount
+        - eligiblePlayers
+      properties:
+        amount:
+          type: number
+        eligiblePlayers:
+          type: array
+          items:
+            type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              example: "INVALID_ACTION"
+            message:
+              type: string
+              example: "プレイヤーがすでにフォールドしています"
+            details:
+              type: object
+
+  responses:
+    BadRequest:
+      description: リクエストが不正
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: リソースが見つからない
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    InternalServerError:
+      description: サーバー内部エラー
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

@@ -13,6 +13,7 @@ import {
   isBettingComplete,
   performShowdown,
   getCurrentBettor,
+  createRNGState,
   type Player,
   type GameState,
 } from '../../src/engine';
@@ -36,7 +37,8 @@ describe('Game Flow Integration', () => {
     ];
 
     // === ラウンド初期化 ===
-    const initResult = initializeRound(players, 0, 10, 20);
+    const rngState = createRNGState(12345);
+    const initResult = initializeRound(players, 0, 10, 20, rngState);
     expect(E.isRight(initResult)).toBe(true);
     if (E.isLeft(initResult)) return;
 
@@ -145,7 +147,8 @@ describe('Game Flow Integration', () => {
       { id: 'p2', name: 'Bob', chips: 1000, seat: 1 },
     ];
 
-    const initResult = initializeRound(players, 0, 10, 20);
+    const rngState = createRNGState(12345);
+    const initResult = initializeRound(players, 0, 10, 20, rngState);
     expect(E.isRight(initResult)).toBe(true);
     if (E.isLeft(initResult)) return;
 
@@ -180,7 +183,8 @@ describe('Game Flow Integration', () => {
       { id: 'p2', name: 'Bob', chips: 1000, seat: 1 },
     ];
 
-    const initResult = initializeRound(players, 0, 10, 20);
+    const rngState = createRNGState(12345);
+    const initResult = initializeRound(players, 0, 10, 20, rngState);
     expect(E.isRight(initResult)).toBe(true);
     if (E.isLeft(initResult)) return;
 
@@ -241,7 +245,8 @@ describe('Game Flow Integration', () => {
       { id: 'p3', name: 'Charlie', chips: 1000, seat: 2 }, // BB
     ];
 
-    const initResult = initializeRound(players, 0, 10, 20);
+    const rngState = createRNGState(12345);
+    const initResult = initializeRound(players, 0, 10, 20, rngState);
     expect(E.isRight(initResult)).toBe(true);
     if (E.isLeft(initResult)) return;
 
@@ -329,7 +334,8 @@ describe('Game Flow Integration', () => {
       { id: 'p3', name: 'Charlie', chips: 1000, seat: 2 }, // BB
     ];
 
-    const initResult = initializeRound(players, 0, 10, 20);
+    const rngState = createRNGState(12345);
+    const initResult = initializeRound(players, 0, 10, 20, rngState);
     expect(E.isRight(initResult)).toBe(true);
     if (E.isLeft(initResult)) return;
 
@@ -387,7 +393,8 @@ describe('Game Flow Integration', () => {
       { id: 'p3', name: 'Charlie', chips: 100, seat: 2 },
     ];
 
-    const initResult = initializeRound(players, 0, 10, 20);
+    const rngState = createRNGState(12345);
+    const initResult = initializeRound(players, 0, 10, 20, rngState);
     expect(E.isRight(initResult)).toBe(true);
     if (E.isLeft(initResult)) return;
 
@@ -458,7 +465,8 @@ describe('Game Flow Integration', () => {
       { id: 'p2', name: 'Bob', chips: 1000, seat: 1 },
     ];
 
-    const initResult = initializeRound(players, 0, 10, 20);
+    const rngState = createRNGState(12345);
+    const initResult = initializeRound(players, 0, 10, 20, rngState);
     expect(E.isRight(initResult)).toBe(true);
     if (E.isLeft(initResult)) return;
 
@@ -499,7 +507,8 @@ describe('Game Flow Integration', () => {
       { id: 'p2', name: 'Bob', chips: 1000, seat: 1 },
     ];
 
-    const initResult = initializeRound(players, 0, 10, 20);
+    const rngState = createRNGState(12345);
+    const initResult = initializeRound(players, 0, 10, 20, rngState);
     expect(E.isRight(initResult)).toBe(true);
     if (E.isLeft(initResult)) return;
 

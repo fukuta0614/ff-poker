@@ -14,6 +14,7 @@ import {
 } from '../../src/engine/game-init';
 import type { GameState, Player, PlayerId } from '../../src/engine/types';
 import { createDeck, shuffleDeck } from '../../src/engine/deck';
+import { createRNGState } from '../../src/engine/rng';
 
 // テスト用のヘルパー関数
 const createTestPlayer = (id: PlayerId, chips: number, seat: number): Player => ({
@@ -32,7 +33,8 @@ describe('Game Initialization', () => {
         createTestPlayer('p3', 1000, 2),
       ];
 
-      const result = initializeRound(players, 0, 10, 20);
+      const rngState = createRNGState(12345);
+      const result = initializeRound(players, 0, 10, 20, rngState);
 
       expect(E.isRight(result)).toBe(true);
       if (E.isRight(result)) {
@@ -53,7 +55,8 @@ describe('Game Initialization', () => {
         createTestPlayer('p2', 1000, 1),
       ];
 
-      const result = initializeRound(players, 0, 10, 20);
+      const rngState = createRNGState(12345);
+      const result = initializeRound(players, 0, 10, 20, rngState);
 
       expect(E.isRight(result)).toBe(true);
       if (E.isRight(result)) {
@@ -79,7 +82,8 @@ describe('Game Initialization', () => {
         createTestPlayer('p3', 1000, 2), // Big blind
       ];
 
-      const result = initializeRound(players, 0, 10, 20);
+      const rngState = createRNGState(12345);
+      const result = initializeRound(players, 0, 10, 20, rngState);
 
       expect(E.isRight(result)).toBe(true);
       if (E.isRight(result)) {
@@ -109,7 +113,8 @@ describe('Game Initialization', () => {
         createTestPlayer('p4', 1000, 3), // First to act
       ];
 
-      const result = initializeRound(players, 0, 10, 20);
+      const rngState = createRNGState(12345);
+      const result = initializeRound(players, 0, 10, 20, rngState);
 
       expect(E.isRight(result)).toBe(true);
       if (E.isRight(result)) {
@@ -124,7 +129,8 @@ describe('Game Initialization', () => {
         createTestPlayer('p2', 1000, 1), // Big blind
       ];
 
-      const result = initializeRound(players, 0, 10, 20);
+      const rngState = createRNGState(12345);
+      const result = initializeRound(players, 0, 10, 20, rngState);
 
       expect(E.isRight(result)).toBe(true);
       if (E.isRight(result)) {
@@ -146,7 +152,8 @@ describe('Game Initialization', () => {
     it('should return Left when less than 2 players', () => {
       const players = [createTestPlayer('p1', 1000, 0)];
 
-      const result = initializeRound(players, 0, 10, 20);
+      const rngState = createRNGState(12345);
+      const result = initializeRound(players, 0, 10, 20, rngState);
 
       expect(E.isLeft(result)).toBe(true);
       if (E.isLeft(result)) {
@@ -161,7 +168,8 @@ describe('Game Initialization', () => {
         createTestPlayer('p3', 15, 2), // Not enough for big blind
       ];
 
-      const result = initializeRound(players, 0, 10, 20);
+      const rngState = createRNGState(12345);
+      const result = initializeRound(players, 0, 10, 20, rngState);
 
       expect(E.isRight(result)).toBe(true);
       if (E.isRight(result)) {
@@ -231,7 +239,8 @@ describe('Game Initialization', () => {
         ['p1', createTestPlayer('p1', 1000, 0)],
         ['p2', createTestPlayer('p2', 1000, 1)],
       ]);
-      const deck = shuffleDeck(createDeck());
+      const rngState = createRNGState(12345);
+      const { shuffledDeck: deck } = shuffleDeck(createDeck(), rngState);
 
       const result = dealHoleCards(players, deck);
 

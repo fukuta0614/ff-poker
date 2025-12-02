@@ -6,6 +6,7 @@ import { describe, it, expect } from '@jest/globals';
 import { calculatePots } from '../../src/engine/pot';
 import type { GameState, Player, PlayerState, PlayerId } from '../../src/engine/types';
 import * as O from 'fp-ts/Option';
+import { createRNGState } from '../../src/engine/rng';
 
 // テスト用のヘルパー関数
 const createTestPlayer = (id: PlayerId, chips: number, seat: number): Player => ({
@@ -43,6 +44,7 @@ const createTestGameState = (
   lastAggressorId: O.none,
   pots: [],
   totalPot: 0,
+  rngState: createRNGState(12345),
 });
 
 describe('Pot Calculation', () => {

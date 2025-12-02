@@ -8,8 +8,9 @@
 - ✅ **Either によるエラーハンドリング**: 型安全なエラー処理
 - ✅ **Option によるnull安全性**: undefined/nullを型で表現
 - ✅ **100%型安全**: `any`型は一切使用していません
-- ✅ **TDD駆動**: 179テスト、96%カバレッジ達成
+- ✅ **TDD駆動**: 181テスト、すべてパス
 - ✅ **純粋関数**: 全ての関数が `currentState -> action -> newState`
+- ✅ **決定的な乱数生成**: RNG状態もGameStateに含まれ、完全に再現可能
 - ✅ **完全なゲームフロー**: プリフロップからショーダウンまで実装済み
 
 ## インストール
@@ -24,7 +25,7 @@ npm install fp-ts
 
 ```typescript
 import * as E from 'fp-ts/Either';
-import { initializeRound } from './engine';
+import { initializeRound, createRNGState } from './engine';
 import type { Player } from './engine';
 
 const players: Player[] = [
@@ -33,7 +34,11 @@ const players: Player[] = [
   { id: 'p3', name: 'Charlie', chips: 1000, seat: 2 },
 ];
 
-const result = initializeRound(players, 0, 10, 20);
+// RNG状態を初期化（シード値で決定的な乱数生成）
+const rngState = createRNGState(Date.now()); // 本番環境
+// const rngState = createRNGState(12345);    // テスト環境（再現可能）
+
+const result = initializeRound(players, 0, 10, 20, rngState);
 
 if (E.isRight(result)) {
   const gameState = result.right;
@@ -113,14 +118,16 @@ initializeRound(
   players: readonly Player[],
   dealerIndex: number,
   smallBlind: number,
-  bigBlind: number
+  bigBlind: number,
+  rngState: RNGState
 ): Either<GameError, GameState>
 ```
 
-- ✅ デッキをシャッフル
+- ✅ デッキをシャッフル（決定的）
 - ✅ 各プレイヤーに2枚のホールカードをディール
 - ✅ ブラインドを徴収
 - ✅ 最初のベッターを設定
+- ✅ RNG状態をGameStateに含める
 
 ### アクション処理
 
@@ -246,6 +253,76 @@ distributeWinnings(
 ): GameState
 ```
 
+### 乱数生成器（RNG）
+
+このエンジンは**完全に決定的な乱数生成**を実装しています。すべてのRNG状態はGameStateに含まれ、同じシード値から常に同じゲーム展開が再現できます。
+
+#### `createRNGState`
+シード値からRNG状態を作成します。
+
+```typescript
+createRNGState(seed: number): RNGState
+```
+
+**使用例:**
+```typescript
+// 本番環境: ランダムなシード
+const rngState = createRNGState(Date.now());
+
+// テスト環境: 固定シード（再現可能）
+const rngState = createRNGState(12345);
+```
+
+#### `createRandomRNGState`
+現在時刻からランダムなRNG状態を作成します（非純粋）。
+
+```typescript
+createRandomRNGState(): RNGState
+```
+
+⚠️ **注意**: この関数は`Date.now()`を使用するため非純粋です。テストでは`createRNGState`を使用してください。
+
+#### `shuffleDeck`
+デッキをシャッフルします（純粋関数版）。
+
+```typescript
+shuffleDeck(
+  deck: readonly Card[],
+  rngState: RNGState
+): {
+  shuffledDeck: readonly Card[];
+  nextRngState: RNGState;
+}
+```
+
+**特徴:**
+- ✅ Fisher-Yatesアルゴリズムを使用
+- ✅ 同じRNG状態から常に同じシャッフル結果
+- ✅ 元のデッキは変更しない（不変性）
+- ✅ 次のRNG状態を返す（純粋関数）
+
+#### RNG状態の管理
+
+```typescript
+// ゲーム初期化時
+const rngState = createRNGState(12345);
+const gameState = initializeRound(players, 0, 10, 20, rngState).right;
+
+// GameStateにRNG状態が含まれる
+console.log(gameState.rngState.seed); // 次のシャッフルで使用される
+
+// ゲームの完全な再現が可能
+const replay1 = initializeRound(players, 0, 10, 20, createRNGState(12345));
+const replay2 = initializeRound(players, 0, 10, 20, createRNGState(12345));
+// replay1とreplay2は完全に同じデッキ順序
+```
+
+**利点:**
+- 🎯 完全なゲーム再現性（デバッグ、リプレイ機能）
+- 🧪 決定的テスト（同じシードで常に同じ結果）
+- 📊 フェアネス検証（シード値の監査が可能）
+- 🔍 バグ再現（特定のシードで問題を再現）
+
 ## 型定義
 
 ### GameState
@@ -265,6 +342,7 @@ interface GameState {
   readonly lastAggressorId: Option<PlayerId>;
   readonly pots: readonly Pot[];
   readonly totalPot: number;
+  readonly rngState: RNGState; // 乱数生成器の状態
 }
 ```
 
