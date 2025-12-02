@@ -18,7 +18,7 @@ module.exports = {
     },
   },
   moduleNameMapper: {
-    '^@engine/(.*)$': '<rootDir>/../server/src/engine/$1',
+    '^@engine/(.*)$': '<rootDir>/src/engine/$1',
   },
   globals: {
     'ts-jest': {

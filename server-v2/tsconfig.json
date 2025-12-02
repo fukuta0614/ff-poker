@@ -19,7 +19,7 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@engine/*": ["../server/src/engine/*"]
+      "@engine/*": ["src/engine/*"]
     }
   },
   "include": ["src/**/*"],
