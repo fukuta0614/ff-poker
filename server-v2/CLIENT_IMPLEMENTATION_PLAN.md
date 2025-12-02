@@ -20,7 +20,7 @@
 | レイヤー | 採用技術 | メモ |
 |---|---|---|
 | ビルド/開発 | Vite 7 + TypeScript 5.9 | ネットリファレンスと同一の Node 20 想定。`npm run dev/build/test` スクリプトを定義。 |
-| UI | React 19, React Router 7 | ルーティング: `/` (Lobby), `/rooms/:roomId` (RoomView)。 |
+| UI | React 19, React Router 7, Chakra UI | ルーティング: `/` (Lobby), `/rooms/:roomId` (RoomView)。UI コンポーネントは Chakra UI を土台に構築し、アクセシビリティと実績あるデザインシステムを確保。 |
 | 状態管理 | React Query (server state) + Zustand (UI state) | Query で REST 状態を caching、Zustand でモーダル/UI 設定を保持。 |
 | バリデーション | Zod + React Hook Form | ルーム作成/参加フォームの検証。 |
 | WebSocket | socket.io-client 4.8.x | 共通 SocketProvider から `room:join/leave` を emit。 |
@@ -45,7 +45,7 @@ client-v2/
 │  │   └─ room/                   # テーブル表示/アクション/ログ
 │  ├─ hooks/                      # useRoomState, usePlayerAction, useRoomSocket
 │  ├─ stores/                     # Zustand (UI state, local prefs)
-│  ├─ components/                 # 共通 UI
+│  ├─ components/                 # 共通 UI (Chakra UI のテーマ/ラッパー)
 │  └─ styles/                     # Tailwind or CSS Modules
 ├─ tests/                         # Vitest + msw
 ├─ e2e/                           # Playwright specs
@@ -81,7 +81,7 @@ client-v2/
    - 最近参加したルームのリスト / 招待リンク共有。
 2. **RoomView**
    - プレイヤー一覧 (seat順、chips、アクション状況)。
-   - コミュニティカード、ポット、現在のベット額表示。
+   - コミュニティカード、ポット、現在のベット額表示。カード描画は既存 client と同様に SVG アセットを用い、Chakra UI の `Image`/`Box` コンポーネントと組み合わせる。
    - ActionBar (利用可能アクションを `gameState.players[n].hand` や `minRaiseAmount` から算出)。
    - イベントフィード (`updateType` + API 応答を整形)。
    - Socket 接続状態のバナー表示。
