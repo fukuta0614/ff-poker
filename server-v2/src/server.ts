@@ -5,6 +5,7 @@
 
 import express, { Request, Response, NextFunction } from 'express';
 import { createServer } from 'http';
+import { Server } from 'socket.io';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yaml';
@@ -14,16 +15,40 @@ import { GameManagerV2 } from './managers/GameManager';
 import { GameService } from './services/GameService';
 import { createRoomsRouter } from './api/routes/rooms';
 import { createActionsRouter } from './api/routes/actions';
+import { GameNotifier } from './websocket/notifier';
+import { setupWebSocketHandler } from './websocket/handler';
+import type {
+  ClientToServerEvents,
+  ServerToClientEvents,
+  InterServerEvents,
+  SocketData,
+} from './websocket/events';
 
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
-// GameManagerとGameServiceの初期化
-const gameManager = new GameManagerV2();
-const gameService = new GameService(gameManager);
-
-// Expressアプリケーション作成
+// HTTPサーバーの作成（Socket.ioとExpressで共有）
 const app = express();
+const httpServer = createServer(app);
+
+// Socket.ioサーバーの初期化
+const io = new Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>(
+  httpServer,
+  {
+    cors: {
+      origin: CORS_ORIGIN,
+      credentials: true,
+    },
+  }
+);
+
+// GameManager、Notifier、GameServiceの初期化
+const gameManager = new GameManagerV2();
+const notifier = new GameNotifier(io);
+const gameService = new GameService(gameManager, notifier);
+
+// WebSocketハンドラーのセットアップ
+setupWebSocketHandler(io, gameManager, notifier);
 
 // ミドルウェア設定
 app.use(cors({
@@ -85,15 +110,13 @@ app.use((_req: Request, res: Response) => {
   });
 });
 
-// HTTPサーバーの作成
-const httpServer = createServer(app);
-
 // サーバー起動（テスト環境では起動しない）
 if (process.env.NODE_ENV !== 'test') {
   httpServer.listen(PORT, () => {
     console.log(`🚀 Server v2 is running on port ${PORT}`);
     console.log(`📖 API Documentation: http://localhost:${PORT}/api-docs`);
     console.log(`🏥 Health Check: http://localhost:${PORT}/health`);
+    console.log(`🔌 WebSocket: ws://localhost:${PORT}`);
     console.log(`🌐 CORS origin: ${CORS_ORIGIN}`);
   });
 

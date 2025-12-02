@@ -27,12 +27,16 @@ import {
   getCurrentBettor,
 } from '@engine/index';
 import { GameManagerV2 } from '../managers/GameManager';
+import type { GameNotifier } from '../websocket/notifier';
 
 /**
  * GameService
  */
 export class GameService {
-  constructor(private gameManager: GameManagerV2) {}
+  constructor(
+    private gameManager: GameManagerV2,
+    private notifier?: GameNotifier
+  ) {}
 
   /**
    * ゲーム開始
@@ -70,6 +74,12 @@ export class GameService {
         // 状態を保存
         this.gameManager.setGameState(roomId, gameState);
         this.gameManager.setRoomState(roomId, 'in_progress');
+
+        // WebSocket通知: ゲーム開始
+        if (this.notifier) {
+          this.notifier.notifyRoomUpdated(roomId, 'game_started');
+        }
+
         return gameState;
       })
     );
@@ -101,6 +111,11 @@ export class GameService {
         // 状態を保存
         this.gameManager.setGameState(roomId, newState);
 
+        // WebSocket通知: プレイヤーアクション
+        if (this.notifier) {
+          this.notifier.notifyRoomUpdated(roomId, 'action');
+        }
+
         // ゲーム進行判定
         if (newState.stage === 'showdown' || newState.stage === 'ended') {
           // ショーダウン処理
@@ -131,6 +146,12 @@ export class GameService {
       result,
       E.map((newState) => {
         this.gameManager.setGameState(roomId, newState);
+
+        // WebSocket通知: ステージ進行
+        if (this.notifier) {
+          this.notifier.notifyRoomUpdated(roomId, 'stage_advanced');
+        }
+
         return newState;
       })
     );
@@ -156,6 +177,11 @@ export class GameService {
 
         // プレイヤーのチップを更新
         this.updatePlayerChips(roomId, finalState);
+
+        // WebSocket通知: ショーダウン結果
+        if (this.notifier) {
+          this.notifier.notifyRoomUpdated(roomId, 'showdown');
+        }
 
         return finalState;
       })

@@ -8,7 +8,30 @@ info:
 
     ## 通信方式
     - **REST API**: コマンド操作（ルーム作成、アクション実行等）
-    - **WebSocket**: リアルタイム通知（/ws エンドポイント）
+    - **WebSocket**: リアルタイム通知（Socket.io使用）
+
+    ## WebSocketイベント（シンプル設計）
+
+    WebSocketは**通知のみ**を送信。詳細なゲーム状態はREST API（GET /rooms/:roomId/state）で取得。
+
+    ### クライアント → サーバー
+    - `room:join` - ルーム参加（playerId, roomId）
+    - `room:leave` - ルーム退出（playerId, roomId）
+
+    ### サーバー → クライアント
+    - `room:updated` - ルーム状態更新通知（updateType: game_started | action | stage_advanced | showdown | player_joined | player_left）
+    - `error` - エラー通知
+
+    ### クライアント実装例
+    ```typescript
+    socket.on('room:updated', async ({ roomId, updateType }) => {
+      // REST APIで最新の状態を取得
+      const state = await fetch(`/api/v1/rooms/${roomId}/state?playerId=${playerId}`)
+      // UI更新
+    })
+    ```
+
+    詳細な型定義は `src/websocket/events.ts` を参照
 
 servers:
   - url: http://localhost:3001/api/v1
