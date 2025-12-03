@@ -58,25 +58,17 @@ npm run test:e2e
 | [設計書](docs/design.md) | アーキテクチャ・API設計・データモデル | 開発者 |
 | [開発ガイドライン](.claude/CLAUDE.md) | コーディング規約・TDD手順・git運用 | 開発者 |
 
-## 開発フロー
+## 開発に参加する
 
-### TDD開発 (推奨)
+このプロジェクトへの貢献を歓迎します！
 
-```bash
-/tsumiki:tdd-requirements    # 要件整理
-/tsumiki:tdd-testcases       # テストケース洗い出し
-/tsumiki:tdd-red             # テスト作成
-/tsumiki:tdd-green           # 実装
-/tsumiki:tdd-refactor        # リファクタリング
-/tsumiki:tdd-verify-complete # 完了検証
-```
+1. このリポジトリをフォーク
+2. フィーチャーブランチを作成 (`git checkout -b feature/amazing-feature`)
+3. 変更をコミット (`git commit -m 'feat: Add amazing feature'`)
+4. ブランチをプッシュ (`git push origin feature/amazing-feature`)
+5. Pull Requestを作成
 
-### コミット前
-
-```bash
-/review   # コードレビュー
-/commit   # コミット作成
-```
+**開発ガイドライン**: [.claude/CLAUDE.md](.claude/CLAUDE.md) を参照
 
 ## プロジェクト構成
 
