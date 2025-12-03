@@ -110,6 +110,7 @@ export {
 // ステージ遷移関数
 export {
   advanceStage,
+  advanceStageWithAck,
   dealFlop,
   dealTurn,
   dealRiver,

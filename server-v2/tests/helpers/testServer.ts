@@ -3,12 +3,13 @@
  * 統合テストで使用するExpressアプリケーションインスタンスを提供
  */
 
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction, Application } from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
 import YAML from 'yaml';
 import fs from 'fs';
 import path from 'path';
+import request from 'supertest';
 import { GameManagerV2 } from '../../src/managers/GameManager';
 import { GameService } from '../../src/services/GameService';
 import { createRoomsRouter } from '../../src/api/routes/rooms';
@@ -87,4 +88,73 @@ export function createTestApp() {
   });
 
   return app;
+}
+
+/**
+ * ゲーム状態を取得して、アクティブなプレイヤーIDのリストを返す
+ * (folded していないプレイヤー)
+ */
+export async function getActivePlayerIds(
+  app: Application,
+  roomId: string,
+  requestingPlayerId: string
+): Promise<string[]> {
+  const stateResponse = await request(app)
+    .get(`/api/v1/rooms/${roomId}/state`)
+    .query({ playerId: requestingPlayerId });
+
+  if (stateResponse.status !== 200) {
+    return [];
+  }
+
+  const gameState = stateResponse.body.gameState;
+  return gameState.players
+    .filter((p: any) => !p.isFolded)
+    .map((p: any) => p.id);
+}
+
+/**
+ * 全アクティブプレイヤーから acknowledge を送信
+ */
+export async function sendAcknowledgments(
+  app: Application,
+  roomId: string,
+  playerIds: string[]
+): Promise<void> {
+  for (const playerId of playerIds) {
+    await request(app)
+      .post(`/api/v1/rooms/${roomId}/actions`)
+      .send({
+        playerId,
+        action: { type: 'acknowledge' },
+      });
+  }
+}
+
+/**
+ * アクション実行 + 自動 acknowledge 送信
+ *
+ * 統合テストで acknowledgment システムに対応するためのヘルパー関数。
+ * アクション実行後、全アクティブプレイヤーから自動的に acknowledge を送信する。
+ */
+export async function executeActionWithAck(
+  app: Application,
+  roomId: string,
+  playerId: string,
+  action: any,
+  allPlayerIds: string[]
+): Promise<any> {
+  // アクション実行
+  const actionResponse = await request(app)
+    .post(`/api/v1/rooms/${roomId}/actions`)
+    .send({ playerId, action });
+
+  if (actionResponse.status !== 200) {
+    return actionResponse;
+  }
+
+  // 全プレイヤーから acknowledge 送信
+  await sendAcknowledgments(app, roomId, allPlayerIds);
+
+  return actionResponse;
 }

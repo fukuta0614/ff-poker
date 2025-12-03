@@ -10,10 +10,12 @@ import {
   initializeRound,
   processAction,
   advanceStage,
+  advanceStageWithAck,
   isBettingComplete,
   performShowdown,
   getCurrentBettor,
   createRNGState,
+  getActivePlayers,
   type Player,
   type GameState,
 } from '../../src/engine';
@@ -47,81 +49,162 @@ describe('Game Flow Integration', () => {
     expect(state.totalPot).toBe(30); // SB + BB
 
     // === プリフロップ: 全員コール/チェック ===
-    while (!isBettingComplete(state)) {
-      const bettor = getCurrentBettorOrThrow(state);
-      const playerState = state.playerStates.get(bettor.id);
-      const callAmount = state.currentBet - (playerState?.bet || 0);
+    while (!isBettingComplete(state) || state.waitingForAck) {
+      if (state.waitingForAck) {
+        // All players need to acknowledge
+        const activePlayers = getActivePlayers(state);
+        for (const player of activePlayers) {
+          const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+          expect(E.isRight(ackResult)).toBe(true);
+          if (E.isLeft(ackResult)) return;
+          state = ackResult.right;
+        }
+      } else {
+        const bettor = getCurrentBettorOrThrow(state);
+        const playerState = state.playerStates.get(bettor.id);
+        const callAmount = state.currentBet - (playerState?.bet || 0);
 
-      // Use check if no amount to call, otherwise call
-      const actionType = callAmount === 0 ? 'check' : 'call';
-      const actionResult = processAction({ playerId: bettor.id, type: actionType }, state);
+        // Use check if no amount to call, otherwise call
+        const actionType = callAmount === 0 ? 'check' : 'call';
+        const actionResult = processAction({ playerId: bettor.id, type: actionType }, state);
 
-      expect(E.isRight(actionResult)).toBe(true);
-      if (E.isLeft(actionResult)) return;
-      state = actionResult.right;
+        expect(E.isRight(actionResult)).toBe(true);
+        if (E.isLeft(actionResult)) return;
+        state = actionResult.right;
+      }
     }
 
     expect(state.totalPot).toBe(60); // 20 * 3
 
     // === フロップ ===
-    const flopResult = advanceStage(state);
+    // Manually advance to flop with ack
+    const flopResult = advanceStageWithAck(state);
     expect(E.isRight(flopResult)).toBe(true);
     if (E.isLeft(flopResult)) return;
     state = flopResult.right;
+
+    // Ack the stage transition
+    let activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
 
     expect(state.stage).toBe('flop');
     expect(state.communityCards.length).toBe(3);
 
     // 全員チェック
-    while (!isBettingComplete(state)) {
-      const bettor = getCurrentBettorOrThrow(state);
-      const actionResult = processAction({ playerId: bettor.id, type: 'check' }, state);
-      expect(E.isRight(actionResult)).toBe(true);
-      if (E.isLeft(actionResult)) return;
-      state = actionResult.right;
+    while (!isBettingComplete(state) || state.waitingForAck) {
+      if (state.waitingForAck) {
+        const activePlayers = getActivePlayers(state);
+        for (const player of activePlayers) {
+          const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+          expect(E.isRight(ackResult)).toBe(true);
+          if (E.isLeft(ackResult)) return;
+          state = ackResult.right;
+        }
+      } else {
+        const bettor = getCurrentBettorOrThrow(state);
+        const actionResult = processAction({ playerId: bettor.id, type: 'check' }, state);
+        expect(E.isRight(actionResult)).toBe(true);
+        if (E.isLeft(actionResult)) return;
+        state = actionResult.right;
+      }
     }
 
     // === ターン ===
-    const turnResult = advanceStage(state);
+    // Manually advance to turn with ack
+    const turnResult = advanceStageWithAck(state);
     expect(E.isRight(turnResult)).toBe(true);
     if (E.isLeft(turnResult)) return;
     state = turnResult.right;
+
+    // Ack the stage transition
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
 
     expect(state.stage).toBe('turn');
     expect(state.communityCards.length).toBe(4);
 
     // 全員チェック
-    while (!isBettingComplete(state)) {
-      const bettor = getCurrentBettorOrThrow(state);
-      const actionResult = processAction({ playerId: bettor.id, type: 'check' }, state);
-      expect(E.isRight(actionResult)).toBe(true);
-      if (E.isLeft(actionResult)) return;
-      state = actionResult.right;
+    while (!isBettingComplete(state) || state.waitingForAck) {
+      if (state.waitingForAck) {
+        const activePlayers = getActivePlayers(state);
+        for (const player of activePlayers) {
+          const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+          expect(E.isRight(ackResult)).toBe(true);
+          if (E.isLeft(ackResult)) return;
+          state = ackResult.right;
+        }
+      } else {
+        const bettor = getCurrentBettorOrThrow(state);
+        const actionResult = processAction({ playerId: bettor.id, type: 'check' }, state);
+        expect(E.isRight(actionResult)).toBe(true);
+        if (E.isLeft(actionResult)) return;
+        state = actionResult.right;
+      }
     }
 
     // === リバー ===
-    const riverResult = advanceStage(state);
+    // Manually advance to river with ack
+    const riverResult = advanceStageWithAck(state);
     expect(E.isRight(riverResult)).toBe(true);
     if (E.isLeft(riverResult)) return;
     state = riverResult.right;
+
+    // Ack the stage transition
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
 
     expect(state.stage).toBe('river');
     expect(state.communityCards.length).toBe(5);
 
     // 全員チェック
-    while (!isBettingComplete(state)) {
-      const bettor = getCurrentBettorOrThrow(state);
-      const actionResult = processAction({ playerId: bettor.id, type: 'check' }, state);
-      expect(E.isRight(actionResult)).toBe(true);
-      if (E.isLeft(actionResult)) return;
-      state = actionResult.right;
+    while (!isBettingComplete(state) || state.waitingForAck) {
+      if (state.waitingForAck) {
+        const activePlayers = getActivePlayers(state);
+        for (const player of activePlayers) {
+          const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+          expect(E.isRight(ackResult)).toBe(true);
+          if (E.isLeft(ackResult)) return;
+          state = ackResult.right;
+        }
+      } else {
+        const bettor = getCurrentBettorOrThrow(state);
+        const actionResult = processAction({ playerId: bettor.id, type: 'check' }, state);
+        expect(E.isRight(actionResult)).toBe(true);
+        if (E.isLeft(actionResult)) return;
+        state = actionResult.right;
+      }
     }
 
     // === ショーダウン ===
-    const showdownStageResult = advanceStage(state);
+    // Manually advance to showdown with ack
+    const showdownStageResult = advanceStageWithAck(state);
     expect(E.isRight(showdownStageResult)).toBe(true);
     if (E.isLeft(showdownStageResult)) return;
     state = showdownStageResult.right;
+
+    // Ack the stage transition
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
 
     expect(state.stage).toBe('showdown');
 
@@ -162,12 +245,30 @@ describe('Game Flow Integration', () => {
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
 
+    // Acknowledge raise
+    let activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
+
     // BB folds
     bettor = getCurrentBettorOrThrow(state);
     actionResult = processAction({ playerId: bettor.id, type: 'fold' }, state);
     expect(E.isRight(actionResult)).toBe(true);
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
+
+    // Acknowledge fold
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
 
     // ゲーム終了（1人だけアクティブ）
     expect(isBettingComplete(state)).toBe(true);
@@ -191,7 +292,7 @@ describe('Game Flow Integration', () => {
     let state: GameState = initResult.right;
 
     // Preflop -> Flop -> Turn -> River -> Showdown -> Ended
-    const expectedStages: Array<'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'ended'> = [
+    const stages: Array<'preflop' | 'flop' | 'turn' | 'river' | 'showdown'> = [
       'preflop',
       'flop',
       'turn',
@@ -199,8 +300,8 @@ describe('Game Flow Integration', () => {
       'showdown',
     ];
 
-    for (let i = 0; i < expectedStages.length; i++) {
-      expect(state.stage).toBe(expectedStages[i]);
+    for (const expectedStage of stages) {
+      expect(state.stage).toBe(expectedStage);
 
       if (state.stage === 'showdown') {
         // Perform showdown instead of advancing stage
@@ -212,26 +313,43 @@ describe('Game Flow Integration', () => {
         break;
       }
 
-      // Complete betting round (both players check)
-      while (!isBettingComplete(state)) {
-        const bettor = getCurrentBettorOrThrow(state);
-        const actionResult = processAction({ playerId: bettor.id, type: 'check' }, state);
-        if (E.isLeft(actionResult)) {
-          // Cannot check, try call instead
-          const callResult = processAction({ playerId: bettor.id, type: 'call' }, state);
-          expect(E.isRight(callResult)).toBe(true);
-          if (E.isLeft(callResult)) return;
-          state = callResult.right;
+      // Complete betting round (both players check/call)
+      while (!isBettingComplete(state) || state.waitingForAck) {
+        if (state.waitingForAck) {
+          const activePlayers = getActivePlayers(state);
+          for (const player of activePlayers) {
+            const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+            expect(E.isRight(ackResult)).toBe(true);
+            if (E.isLeft(ackResult)) return;
+            state = ackResult.right;
+          }
         } else {
+          const bettor = getCurrentBettorOrThrow(state);
+          const playerState = state.playerStates.get(bettor.id);
+          const callAmount = state.currentBet - (playerState?.bet || 0);
+
+          const actionType = callAmount === 0 ? 'check' : 'call';
+          const actionResult = processAction({ playerId: bettor.id, type: actionType }, state);
+          expect(E.isRight(actionResult)).toBe(true);
+          if (E.isLeft(actionResult)) return;
           state = actionResult.right;
         }
       }
 
-      // Advance to next stage
-      const stageResult = advanceStage(state);
+      // Manually advance to next stage with ack
+      const stageResult = advanceStageWithAck(state);
       expect(E.isRight(stageResult)).toBe(true);
       if (E.isLeft(stageResult)) return;
       state = stageResult.right;
+
+      // Ack the stage transition
+      const activePlayers = getActivePlayers(state);
+      for (const player of activePlayers) {
+        const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+        expect(E.isRight(ackResult)).toBe(true);
+        if (E.isLeft(ackResult)) return;
+        state = ackResult.right;
+      }
     }
 
     expect(state.stage).toBe('ended');
@@ -260,6 +378,15 @@ describe('Game Flow Integration', () => {
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
 
+    // Acknowledge call
+    let activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
+
     // SB (Bob) goes all-in with 100 chips
     bettor = getCurrentBettorOrThrow(state);
     expect(bettor.id).toBe('p2');
@@ -267,6 +394,15 @@ describe('Game Flow Integration', () => {
     expect(E.isRight(actionResult)).toBe(true);
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
+
+    // Acknowledge all-in
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
 
     // BB (Charlie) calls
     bettor = getCurrentBettorOrThrow(state);
@@ -276,6 +412,15 @@ describe('Game Flow Integration', () => {
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
 
+    // Acknowledge call
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
+
     // Alice needs to call the all-in
     bettor = getCurrentBettorOrThrow(state);
     expect(bettor.id).toBe('p1');
@@ -283,6 +428,15 @@ describe('Game Flow Integration', () => {
     expect(E.isRight(actionResult)).toBe(true);
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
+
+    // Acknowledge final call
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
 
     // Betting complete
     expect(isBettingComplete(state)).toBe(true);
@@ -297,19 +451,38 @@ describe('Game Flow Integration', () => {
     // Advance through all stages (Bob is all-in, so auto-check for others)
     while (state.stage !== 'showdown') {
       // Complete betting round
-      while (!isBettingComplete(state)) {
-        bettor = getCurrentBettorOrThrow(state);
-        actionResult = processAction({ playerId: bettor.id, type: 'check' }, state);
-        expect(E.isRight(actionResult)).toBe(true);
-        if (E.isLeft(actionResult)) return;
-        state = actionResult.right;
+      while (!isBettingComplete(state) || state.waitingForAck) {
+        if (state.waitingForAck) {
+          activePlayers = getActivePlayers(state);
+          for (const player of activePlayers) {
+            let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+            expect(E.isRight(ackResult)).toBe(true);
+            if (E.isLeft(ackResult)) return;
+            state = ackResult.right;
+          }
+        } else {
+          bettor = getCurrentBettorOrThrow(state);
+          actionResult = processAction({ playerId: bettor.id, type: 'check' }, state);
+          expect(E.isRight(actionResult)).toBe(true);
+          if (E.isLeft(actionResult)) return;
+          state = actionResult.right;
+        }
       }
 
-      // Advance stage
-      const stageResult = advanceStage(state);
+      // Manually advance to next stage with ack
+      const stageResult = advanceStageWithAck(state);
       expect(E.isRight(stageResult)).toBe(true);
       if (E.isLeft(stageResult)) return;
       state = stageResult.right;
+
+      // Ack the stage transition
+      activePlayers = getActivePlayers(state);
+      for (const player of activePlayers) {
+        let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+        expect(E.isRight(ackResult)).toBe(true);
+        if (E.isLeft(ackResult)) return;
+        state = ackResult.right;
+      }
     }
 
     // Showdown
@@ -350,6 +523,15 @@ describe('Game Flow Integration', () => {
     state = actionResult.right;
     expect(state.currentBet).toBe(60);
 
+    // Acknowledge raise
+    let activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
+
     // SB (p2) reraises to 150
     bettor = getCurrentBettorOrThrow(state);
     expect(bettor.id).toBe('p2');
@@ -359,6 +541,15 @@ describe('Game Flow Integration', () => {
     state = actionResult.right;
     expect(state.currentBet).toBe(150);
 
+    // Acknowledge reraise
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
+
     // BB (p3) folds
     bettor = getCurrentBettorOrThrow(state);
     expect(bettor.id).toBe('p3');
@@ -367,6 +558,15 @@ describe('Game Flow Integration', () => {
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
 
+    // Acknowledge fold
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
+
     // UTG (p1) calls the reraise
     bettor = getCurrentBettorOrThrow(state);
     expect(bettor.id).toBe('p1');
@@ -374,6 +574,15 @@ describe('Game Flow Integration', () => {
     expect(E.isRight(actionResult)).toBe(true);
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
+
+    // Acknowledge final call
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
 
     expect(isBettingComplete(state)).toBe(true);
 
@@ -407,12 +616,30 @@ describe('Game Flow Integration', () => {
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
 
+    // Acknowledge raise
+    let activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
+
     // SB (p2) goes all-in with 200
     bettor = getCurrentBettorOrThrow(state);
     actionResult = processAction({ playerId: bettor.id, type: 'allin' }, state);
     expect(E.isRight(actionResult)).toBe(true);
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
+
+    // Acknowledge all-in
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
 
     // BB (p3) goes all-in with 100
     bettor = getCurrentBettorOrThrow(state);
@@ -421,6 +648,15 @@ describe('Game Flow Integration', () => {
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
 
+    // Acknowledge all-in
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
+
     // p1 calls the 200
     bettor = getCurrentBettorOrThrow(state);
     actionResult = processAction({ playerId: bettor.id, type: 'call' }, state);
@@ -428,17 +664,37 @@ describe('Game Flow Integration', () => {
     if (E.isLeft(actionResult)) return;
     state = actionResult.right;
 
+    // Acknowledge call
+    activePlayers = getActivePlayers(state);
+    for (const player of activePlayers) {
+      let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+      expect(E.isRight(ackResult)).toBe(true);
+      if (E.isLeft(ackResult)) return;
+      state = ackResult.right;
+    }
+
     expect(isBettingComplete(state)).toBe(true);
 
     // Total pot: 200 + 200 + 100 = 500
     expect(state.totalPot).toBe(500);
 
-    // Auto-advance to showdown (all players all-in except p1)
+    // Betting complete should trigger auto-advance to showdown (all players all-in)
+    // Since all players are all-in, there's no more betting, so advance through all stages to showdown
     while (state.stage !== 'showdown') {
-      const stageResult = advanceStage(state);
+      // Manually advance to next stage with ack
+      const stageResult = advanceStageWithAck(state);
       expect(E.isRight(stageResult)).toBe(true);
       if (E.isLeft(stageResult)) return;
       state = stageResult.right;
+
+      // Ack the stage transition
+      const activePlayers = getActivePlayers(state);
+      for (const player of activePlayers) {
+        let ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+        expect(E.isRight(ackResult)).toBe(true);
+        if (E.isLeft(ackResult)) return;
+        state = ackResult.right;
+      }
     }
 
     // Showdown with side pots
@@ -516,23 +772,43 @@ describe('Game Flow Integration', () => {
 
     // Both players check/call through all streets
     while (state.stage !== 'showdown') {
-      while (!isBettingComplete(state)) {
-        const bettor = getCurrentBettorOrThrow(state);
-        const playerState = state.playerStates.get(bettor.id);
-        const callAmount = state.currentBet - (playerState?.bet || 0);
+      while (!isBettingComplete(state) || state.waitingForAck) {
+        if (state.waitingForAck) {
+          const activePlayers = getActivePlayers(state);
+          for (const player of activePlayers) {
+            const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+            expect(E.isRight(ackResult)).toBe(true);
+            if (E.isLeft(ackResult)) return;
+            state = ackResult.right;
+          }
+        } else {
+          const bettor = getCurrentBettorOrThrow(state);
+          const playerState = state.playerStates.get(bettor.id);
+          const callAmount = state.currentBet - (playerState?.bet || 0);
 
-        const actionType = callAmount === 0 ? 'check' : 'call';
-        const actionResult = processAction({ playerId: bettor.id, type: actionType }, state);
+          const actionType = callAmount === 0 ? 'check' : 'call';
+          const actionResult = processAction({ playerId: bettor.id, type: actionType }, state);
 
-        expect(E.isRight(actionResult)).toBe(true);
-        if (E.isLeft(actionResult)) return;
-        state = actionResult.right;
+          expect(E.isRight(actionResult)).toBe(true);
+          if (E.isLeft(actionResult)) return;
+          state = actionResult.right;
+        }
       }
 
-      const stageResult = advanceStage(state);
+      // Manually advance to next stage with ack
+      const stageResult = advanceStageWithAck(state);
       expect(E.isRight(stageResult)).toBe(true);
       if (E.isLeft(stageResult)) return;
       state = stageResult.right;
+
+      // Ack the stage transition
+      const activePlayers = getActivePlayers(state);
+      for (const player of activePlayers) {
+        const ackResult = processAction({ playerId: player.id, type: 'acknowledge' }, state);
+        expect(E.isRight(ackResult)).toBe(true);
+        if (E.isLeft(ackResult)) return;
+        state = ackResult.right;
+      }
     }
 
     // Showdown

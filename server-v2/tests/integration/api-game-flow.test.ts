@@ -5,7 +5,7 @@
  */
 
 import request from 'supertest';
-import { createTestApp } from '../helpers/testServer';
+import { createTestApp, getActivePlayerIds, sendAcknowledgments } from '../helpers/testServer';
 
 describe('API Integration - Full Game Flow', () => {
   const app = createTestApp();
@@ -249,6 +249,10 @@ describe('API Integration - Full Game Flow', () => {
         if (actionResponse.status === 200) {
           expect(actionResponse.body.success).toBe(true);
           actionsExecuted++;
+
+          // アクション後、全プレイヤーから acknowledge を送信
+          const activePlayerIds = await getActivePlayerIds(app, scenario_roomId, scenario_players[0]);
+          await sendAcknowledgments(app, scenario_roomId, activePlayerIds);
         } else {
           // 400エラーの場合は終了（ゲームが進行できない状態）
           break;

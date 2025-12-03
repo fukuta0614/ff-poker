@@ -9,7 +9,7 @@ import { Option } from 'fp-ts/Option';
 export type PlayerId = string;
 export type Card = string; // "As", "Kh" など
 
-export type ActionType = 'fold' | 'check' | 'call' | 'raise' | 'allin';
+export type ActionType = 'fold' | 'check' | 'call' | 'raise' | 'allin' | 'acknowledge';
 
 export type Stage = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'ended';
 
@@ -50,6 +50,41 @@ export interface PlayerState {
   readonly hand: Option<readonly [Card, Card]>; // ホールカード
 }
 
+// --- 確認応答型 ---
+
+/**
+ * 確認応答の状態
+ */
+export interface AcknowledgmentState {
+  /**
+   * ack を期待するプレイヤーID
+   * ゲーム中の全アクティブプレイヤー (folded 以外)
+   */
+  readonly expectedAcks: ReadonlySet<PlayerId>;
+
+  /**
+   * 既に受信した ack
+   */
+  readonly receivedAcks: ReadonlySet<PlayerId>;
+
+  /**
+   * ack 待ち開始のタイムスタンプ (タイムアウト検出用)
+   */
+  readonly startedAt: number;
+
+  /**
+   * 遷移の説明 (デバッグ用)
+   */
+  readonly description: string;
+
+  /**
+   * ack のタイプ
+   * 'action': プレイヤーアクション後の ack
+   * 'stage_transition': ステージ遷移後の ack
+   */
+  readonly type: 'action' | 'stage_transition';
+}
+
 // --- ポット型 ---
 
 export interface Pot {
@@ -73,6 +108,19 @@ export interface GameState {
   readonly pots: readonly Pot[];
   readonly totalPot: number;
   readonly rngState: RNGState; // 乱数生成器の状態
+
+  /**
+   * クライアントからの確認応答を待っているか
+   * true: 全クライアントの ack を待機中 (アクションを受け付けない)
+   * false: 通常状態 (アクションを受け付け可能)
+   */
+  readonly waitingForAck: boolean;
+
+  /**
+   * 確認応答の状態
+   * waitingForAck が true の時のみ Some
+   */
+  readonly ackState: Option<AcknowledgmentState>;
 }
 
 // --- アクション型 ---
@@ -81,6 +129,9 @@ export interface PlayerAction {
   readonly playerId: PlayerId;
   readonly type: ActionType;
   readonly amount?: number;
+
+  // acknowledge アクション専用フィールド
+  readonly acknowledgedAt?: number; // クライアント側のタイムスタンプ
 }
 
 // --- エラー型 ---
@@ -99,7 +150,11 @@ export type GameError =
   | { readonly type: 'BettingNotComplete' }
   | { readonly type: 'InvalidCardFormat'; readonly card: string; readonly reason: string }
   | { readonly type: 'HandEvaluationFailed'; readonly reason: string }
-  | { readonly type: 'MissingHand'; readonly playerId: PlayerId; readonly stage: Stage };
+  | { readonly type: 'MissingHand'; readonly playerId: PlayerId; readonly stage: Stage }
+  | { readonly type: 'WaitingForAcknowledgment' }
+  | { readonly type: 'AcknowledgmentNotExpected'; readonly playerId: PlayerId }
+  | { readonly type: 'AcknowledgmentAlreadyReceived'; readonly playerId: PlayerId }
+  | { readonly type: 'AcknowledgmentTimeout'; readonly ackState: AcknowledgmentState };
 
 // --- 結果型 ---
 

@@ -121,6 +121,8 @@ export const initializeRound = (
     pots: [],
     totalPot,
     rngState: deckRngState, // シャッフル後のRNG状態を保持
+    waitingForAck: false, // 初期状態では ack 待ちではない
+    ackState: O.none, // 初期状態では ackState は None
   });
 };
 

@@ -59,6 +59,8 @@ function createTestGameState(overrides?: Partial<GameState>): GameState {
     pots: [],
     totalPot: 170,
     rngState: createRNGState(12345),
+    waitingForAck: false,
+    ackState: O.none,
     ...overrides,
   };
 }

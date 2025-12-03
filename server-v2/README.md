@@ -2,7 +2,7 @@
 
 **OpenAPI 準拠の純粋関数型ゲームエンジンを使用したポーカーサーバー**
 
-[![Tests](https://img.shields.io/badge/tests-56%2F56%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/tests-273%2F273%20passing-brightgreen)]()
 [![Coverage](https://img.shields.io/badge/coverage-80%25%2B-green)]()
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)]()
 [![Node](https://img.shields.io/badge/node-%3E%3D20.0.0-brightgreen)]()
@@ -17,6 +17,7 @@
 - [セットアップ](#セットアップ)
 - [使い方](#使い方)
 - [API仕様](#api仕様)
+- [Acknowledgment システム](#acknowledgment-システム-) 🆕
 - [開発](#開発)
 - [テスト](#テスト)
 - [ロードマップ](#ロードマップ)
@@ -37,11 +38,11 @@ FF Poker Server v2は、テキサスホールデムポーカーのマルチプ�
 
 ### バージョン情報
 
-- **バージョン**: 2.1.0
-- **ステータス**: Phase 1-5 完了 (REST API + WebSocket実装済み)
+- **バージョン**: 2.2.0-alpha
+- **ステータス**: Phase 1-5 完了 + Acknowledgment システム実装済み
 - **Node.js**: 20.x LTS
 - **作成日**: 2025-12-02
-- **最終更新**: 2025-12-03 (Phase 4 WebSocket実装完了)
+- **最終更新**: 2025-12-04 (Acknowledgment ベース状態同期実装完了)
 
 ---
 
@@ -56,9 +57,13 @@ FF Poker Server v2は、テキサスホールデムポーカーのマルチプ�
 
 - [x] **ゲーム機能**
   - ゲーム開始（2-9人プレイヤー対応）
-  - プレイヤーアクション (fold, check, call, raise, allin)
+  - プレイヤーアクション (fold, check, call, raise, allin, acknowledge)
   - ステージ進行 (preflop → flop → turn → river → showdown)
   - ポット管理（メインポット、サイドポット）
+  - **Acknowledgment ベース状態同期** 🆕
+    - 全クライアントの画面更新を待ってから次のステップへ進行
+    - クライアント主導の状態同期で不整合を防止
+    - all-in 時も各ステージごとにクライアントの確認を待つ
 
 - [x] **API エンドポイント**
   - REST API (Express)
@@ -71,10 +76,10 @@ FF Poker Server v2は、テキサスホールデムポーカーのマルチプ�
   - 最小限のイベント（room:updated、error）
 
 - [x] **テスト**
-  - ユニットテスト (35テスト)
-  - 統合テスト (29テスト)
-  - エンジンテスト (198テスト)
-  - 100%パス率（262テスト）
+  - エンジンテスト (190テスト - acknowledgment 対応)
+  - サービス層テスト (35テスト)
+  - 統合テスト (48テスト - acknowledgment 対応)
+  - 100%パス率（273テスト）
 
 ### 📅 計画中
 
@@ -144,7 +149,7 @@ server-v2/
 │   └── server.ts                 # エントリーポイント
 ├── tests/
 │   ├── helpers/
-│   │   └── testServer.ts         # テスト用ヘルパー
+│   │   └── testServer.ts         # テスト用ヘルパー (acknowledgment対応) 🆕
 │   ├── websocket/                # WebSocketテスト 🆕
 │   │   └── Notifier.test.ts      # Notifierユニットテスト
 │   ├── managers/
@@ -154,14 +159,16 @@ server-v2/
 │   ├── engine/                   # エンジンテスト
 │   │   └── *.test.ts             # 各種エンジンテスト
 │   └── integration/
-│       ├── api-game-flow.test.ts          # 基本統合テスト
-│       └── api-game-flow-heads-up.test.ts # ヘッズアップテスト
+│       ├── api-game-flow.test.ts             # 基本統合テスト (ack対応) 🆕
+│       ├── api-game-flow-heads-up.test.ts    # ヘッズアップテスト (ack対応) 🆕
+│       └── api-websocket-integration.test.ts # WebSocket統合テスト (ack対応) 🆕
 ├── package.json
 ├── tsconfig.json
 ├── jest.config.js
-├── README.md                     # このファイル
-├── HANDOVER.md                   # 開発引き継ぎドキュメント
-└── TEST_SCENARIOS.md             # テストシナリオ一覧
+├── README.md                              # このファイル
+├── ACKNOWLEDGMENT_SYNC_DESIGN.md          # Acknowledgmentシステム設計書 🆕
+├── GAME_FLOW_SEQUENCE.md                  # ゲームフロー詳細仕様 🆕
+└── TEST_SCENARIOS.md                      # テストシナリオ一覧
 ```
 
 ---
@@ -277,6 +284,22 @@ curl -X POST http://localhost:3001/api/v1/rooms/room-abc123/actions \
 curl "http://localhost:3001/api/v1/rooms/room-abc123/state?playerId=player-xyz789"
 ```
 
+#### 6. Acknowledgment 送信 🆕
+
+```bash
+# クライアントが画面更新を完了したことを通知
+curl -X POST http://localhost:3001/api/v1/rooms/room-abc123/actions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "playerId": "player-xyz789",
+    "action": {
+      "type": "acknowledge"
+    }
+  }'
+```
+
+**注意**: Acknowledgment アクションは、通常のゲームアクション（fold, call, raise など）の後に、全プレイヤーが送信する必要があります。全員から ack を受信するまで、ゲームは次のステップに進みません。
+
 ---
 
 ## API仕様
@@ -316,14 +339,130 @@ curl "http://localhost:3001/api/v1/rooms/room-abc123/state?playerId=player-xyz78
 ### プレイヤーアクションタイプ
 
 ```typescript
-type ActionType = 'fold' | 'check' | 'call' | 'raise' | 'allin';
+type ActionType = 'fold' | 'check' | 'call' | 'raise' | 'allin' | 'acknowledge';
 ```
+
+**`acknowledge` アクション** 🆕: クライアントが画面更新を完了したことをサーバーに通知するための特殊アクション。全プレイヤーから acknowledge を受信するまで、次のステップへ進まない。
 
 ### ゲームステージ
 
 ```typescript
 type Stage = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'ended';
 ```
+
+---
+
+## Acknowledgment システム 🆕
+
+### 概要
+
+Acknowledgment システムは、クライアント・サーバー間の状態同期を確実にし、クライアント側の画面遷移制御を簡素化するための仕組みです。
+
+### 動作フロー
+
+```
+┌─────────────┐
+│ Client A/B/C│
+└──────┬──────┘
+       │ (1) Action (fold/call/raise)
+       ↓
+┌─────────────┐
+│   Server    │ (2) processAction()
+│ GameService │     ↓
+└──────┬──────┘     GameState (waitingForAck: true)
+       │
+       │ (3) Broadcast: room:updated
+       ├────────────┐
+       │            │
+       ↓            ↓
+┌──────────┐  ┌──────────┐
+│ Client A │  │ Client B │
+│ 画面更新 │  │ 画面更新 │
+└────┬─────┘  └────┬─────┘
+     │             │
+     │ (4) ack     │ (4) ack
+     └─────┬───────┘
+           ↓
+     ┌─────────────┐
+     │   Server    │ (5) 全ack受信確認
+     │ GameService │     ↓
+     └──────┬──────┘     resolveAcknowledgment()
+            │            ↓
+            │            次のステップへ (必要なら)
+            │
+            │ (6) Broadcast: room:updated (次の状態)
+            ↓
+```
+
+### 主要な機能
+
+#### 1. アクション後の ack 待ち状態
+
+```typescript
+// GameState に追加されたフィールド
+interface GameState {
+  // ... 既存のフィールド
+  readonly waitingForAck: boolean;  // ack 待ちフラグ
+  readonly ackState: Option<AcknowledgmentState>;  // ack 状態
+}
+```
+
+#### 2. 状態遷移パターン
+
+**パターンA: 通常のアクション**
+```
+stage: preflop, waitingForAck: false (Player1 の番)
+  ↓ Player1: call
+stage: preflop, waitingForAck: true
+  ↓ 全プレイヤーから ack
+stage: preflop, waitingForAck: false (Player2 の番)
+```
+
+**パターンB: all-in による自動進行**
+```
+stage: preflop, waitingForAck: false (全員 all-in)
+  ↓ 最後の call アクション
+stage: preflop, waitingForAck: true
+  ↓ 全プレイヤーから ack
+stage: flop, waitingForAck: true  ← 自動進行、但し ack 待ち
+  ↓ 全プレイヤーから ack
+stage: turn, waitingForAck: true  ← 次のステージへ
+```
+
+### メリット
+
+- ✅ **確実な状態同期**: 全クライアントが画面更新を完了してから次のステップへ
+- ✅ **クライアント側の簡素化**: 複雑な状態管理が不要、画面更新 → ack のシンプルなフロー
+- ✅ **デバッグの容易性**: どのクライアントが ack を返していないかが明確
+- ✅ **段階的な進行**: all-in でも各ステージごとに画面更新を待つ
+
+### 使用例
+
+#### クライアント側の実装
+
+```typescript
+// room:updated イベントを受信
+socket.on('room:updated', async (data) => {
+  // 1. 最新の状態を取得
+  const state = await fetchRoomState(roomId, playerId);
+
+  // 2. 画面を更新
+  updateUI(state);
+
+  // 3. ack を送信
+  await sendAction({
+    playerId,
+    type: 'acknowledge',
+    acknowledgedAt: Date.now(),
+  });
+});
+```
+
+### 詳細仕様
+
+詳細な設計仕様は [ACKNOWLEDGMENT_SYNC_DESIGN.md](./ACKNOWLEDGMENT_SYNC_DESIGN.md) を参照してください。
+
+---
 
 ### クライアントコード生成（未実装）
 
@@ -382,14 +521,15 @@ npm test -- --testPathPattern="heads-up"
 ### テスト結果
 
 ```
-✅ GameManager.test.ts:             17/17 passed
-✅ GameService.test.ts:              10/10 passed
-✅ Notifier.test.ts:                  8/8 passed 🆕（シンプル化）
-✅ api-game-flow.test.ts:            13/13 passed
-✅ api-game-flow-heads-up.test.ts:   16/16 passed
-✅ Engine tests:                    198/198 passed
+✅ Engine tests:                    190/190 passed (acknowledgment 対応)
+✅ GameManager.test.ts:              17/17 passed
+✅ GameService.test.ts:               10/10 passed
+✅ Notifier.test.ts:                   8/8 passed
+✅ api-game-flow.test.ts:             13/13 passed (acknowledgment 対応)
+✅ api-game-flow-heads-up.test.ts:    33/33 passed (acknowledgment 対応)
+✅ api-websocket-integration.test.ts:  2/2 passed (acknowledgment 対応)
 
-合計: 262/262 passed (100%)
+合計: 273/273 passed (100%) 🎉
 ```
 
 詳細なテストシナリオは [TEST_SCENARIOS.md](./TEST_SCENARIOS.md) を参照。
@@ -464,11 +604,20 @@ npm test -- --testPathPattern="GameService" --verbose
 - [x] GameManagerV2とGameService実装
 - [x] REST APIエンドポイント実装
 - [x] HTTP統合テスト作成
-- [x] WebSocketサーバー実装 🆕
-- [x] リアルタイム通知機能 🆕
-- [x] Socket.io統合 🆕
+- [x] WebSocketサーバー実装
+- [x] リアルタイム通知機能
+- [x] Socket.io統合
+- [x] **Acknowledgment ベース状態同期システム** 🆕
+  - [x] エンジン層実装（フェーズ1）
+  - [x] サーバー層実装（フェーズ2）
+  - [x] API層対応
+  - [x] 統合テスト更新（273テスト通過）
 
 ### Phase 6: 将来計画 📅
+- [ ] **Acknowledgment システム - クライアント実装** 🎯
+  - [ ] WebSocket による自動 acknowledge 送信
+  - [ ] 画面更新完了の検知
+  - [ ] リトライロジック
 - [ ] TypeScriptクライアント自動生成
 - [ ] React UIコンポーネント
 - [ ] WebSocketクライアント実装
@@ -540,10 +689,10 @@ test(integration): Add heads-up game scenarios
 
 ## 関連ドキュメント
 
-- [HANDOVER.md](./HANDOVER.md) - 開発引き継ぎドキュメント
+- [ACKNOWLEDGMENT_SYNC_DESIGN.md](./ACKNOWLEDGMENT_SYNC_DESIGN.md) - Acknowledgment システム設計書 🆕
+- [GAME_FLOW_SEQUENCE.md](./GAME_FLOW_SEQUENCE.md) - ゲームフロー詳細仕様 🆕
 - [TEST_SCENARIOS.md](./TEST_SCENARIOS.md) - テストシナリオ一覧
-- [../docs/migration/server-v2-migration-openapi.md](../docs/migration/server-v2-migration-openapi.md) - マイグレーション計画書
-- [../server/src/engine/README.md](../server/src/engine/README.md) - エンジン仕様書
+- [src/engine/README.md](./src/engine/README.md) - エンジン仕様書
 - [../.claude/CLAUDE.md](../.claude/CLAUDE.md) - プロジェクトガイドライン
 
 ---
@@ -557,13 +706,13 @@ MIT
 ## サポート
 
 問題が発生した場合:
-1. [TEST_SCENARIOS.md](./TEST_SCENARIOS.md) でテストシナリオを確認
-2. [HANDOVER.md](./HANDOVER.md) のトラブルシューティングを参照
+1. [ACKNOWLEDGMENT_SYNC_DESIGN.md](./ACKNOWLEDGMENT_SYNC_DESIGN.md) で設計仕様を確認
+2. [TEST_SCENARIOS.md](./TEST_SCENARIOS.md) でテストシナリオを確認
 3. Issueを作成
 
 ---
 
-**最終更新**: 2025-12-03
+**最終更新**: 2025-12-04
 **メンテナ**: Claude Code
-**バージョン**: 2.1.0
-**Phase 4 WebSocket実装完了**: 2025-12-03
+**バージョン**: 2.2.0-alpha
+**Acknowledgment システム実装完了**: 2025-12-04

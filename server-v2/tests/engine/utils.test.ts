@@ -58,6 +58,8 @@ const createTestGameState = (
   pots: [],
   totalPot: 0,
   rngState: createRNGState(12345),
+  waitingForAck: false,
+  ackState: O.none,
 });
 
 describe('Utils Functions', () => {

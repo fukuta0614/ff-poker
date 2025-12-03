@@ -5,7 +5,7 @@
  */
 
 import request from 'supertest';
-import { createTestApp } from '../helpers/testServer';
+import { createTestApp, getActivePlayerIds, sendAcknowledgments } from '../helpers/testServer';
 
 describe('API Integration - Heads-Up Game Flow', () => {
   const app = createTestApp();
@@ -120,6 +120,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      const activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // ゲームが終了していることを確認
       const finalGameState = actionResponse.body.gameState;
       expect(['ended', 'showdown', 'flop']).toContain(finalGameState.stage);
@@ -169,6 +173,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // BBがチェック（アクションが回ってくる）
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -187,6 +195,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
             action: { type: 'check' },
           })
           .expect(200);
+
+        // アクション後、全プレイヤーから acknowledge を送信
+        activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+        await sendAcknowledgments(app, roomId, activePlayerIds);
 
         // フロップに進んでいることを確認
         expect(actionResponse.body.gameState.stage).toBe('flop');
@@ -235,6 +247,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // 相手がコール
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -251,6 +267,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action: { type: 'call' },
         })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // フロップに進んでいることを確認
       expect(callResponse.body.gameState.stage).toBe('flop');
@@ -304,6 +324,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // 相手がコール
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -320,6 +344,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action: { type: 'call' },
         })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // ゲーム状態を確認（オールインの場合、全カードが開かれる）
       const finalState = callResponse.body.gameState;
@@ -378,6 +406,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // 相手がフォールド
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -394,6 +426,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action: { type: 'fold' },
         })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // ゲームが終了していることを確認
       expect(['ended', 'showdown', 'flop']).toContain(foldResponse.body.gameState.stage);
@@ -458,13 +494,18 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action = { type: 'check' }; // チェック可能
         }
 
-        await request(app)
+        const actionResponse = await request(app)
           .post(`/api/v1/rooms/${roomId}/actions`)
           .send({
             playerId: currentBettorId,
             action,
-          })
-          .expect(200);
+          });
+
+        if (actionResponse.status === 200) {
+          // アクション後、全プレイヤーから acknowledge を送信
+          const activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+          await sendAcknowledgments(app, roomId, activePlayerIds);
+        }
       }
 
       // 最終状態を確認
@@ -526,6 +567,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // プレイヤー2もオールインでコール
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -542,6 +587,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action: { type: 'call' },
         })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // 両者オールインなので、ショーダウンまで自動進行
       const finalState = callResponse.body.gameState;
@@ -601,6 +650,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      const activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // ラウンド2: 新しいラウンドを開始
       const round2Start = await request(app)
         .post(`/api/v1/rooms/${roomId}/start`)
@@ -657,6 +710,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // 2nd レイズ (リレイズ)
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -673,6 +730,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action: { type: 'raise', amount: 120 },
         })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // 3rd レイズ
       stateResponse = await request(app)
@@ -691,6 +752,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // 最終的にコール
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -707,6 +772,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action: { type: 'call' },
         })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // フロップに進行
       expect(callResponse.body.gameState.stage).toBe('flop');
@@ -760,6 +829,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // 相手がコール
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -776,6 +849,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action: { type: 'call' },
         })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // ゲームが進行していることを確認
       expect(callResponse.body.gameState.stage).toBe('flop');
@@ -822,6 +899,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // プレイヤー2がコール
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -838,6 +919,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action: { type: 'call' },
         })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // ポット情報を確認
       const gameState = callResponse.body.gameState;
@@ -944,6 +1029,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // BBがチェック
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -961,6 +1050,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
             action: { type: 'check' },
           })
           .expect(200);
+
+        // アクション後、全プレイヤーから acknowledge を送信
+        activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+        await sendAcknowledgments(app, roomId, activePlayerIds);
       }
 
       // フロップ以降、連続チェックダウン
@@ -980,13 +1073,18 @@ describe('API Integration - Heads-Up Game Flow', () => {
         currentBettorId = gameState.players[gameState.currentBettorIndex].id;
 
         // チェック
-        await request(app)
+        const checkResponse = await request(app)
           .post(`/api/v1/rooms/${roomId}/actions`)
           .send({
             playerId: currentBettorId,
             action: { type: 'check' },
-          })
-          .expect(200);
+          });
+
+        if (checkResponse.status === 200) {
+          // アクション後、全プレイヤーから acknowledge を送信
+          activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+          await sendAcknowledgments(app, roomId, activePlayerIds);
+        }
       }
 
       // 最終的にショーダウンまで到達
@@ -1031,6 +1129,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         .send({ playerId: currentBettorId, action: { type: 'call' } })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
         .query({ playerId: player1Id });
@@ -1044,6 +1146,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
           .post(`/api/v1/rooms/${roomId}/actions`)
           .send({ playerId: currentBettorId, action: { type: 'check' } })
           .expect(200);
+
+        // アクション後、全プレイヤーから acknowledge を送信
+        activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+        await sendAcknowledgments(app, roomId, activePlayerIds);
       }
 
       // フロップでベット
@@ -1062,6 +1168,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         .send({ playerId: currentBettorId, action: { type: 'raise', amount: 50 } })
         .expect(200);
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // コール
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -1075,6 +1185,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         .post(`/api/v1/rooms/${roomId}/actions`)
         .send({ playerId: currentBettorId, action: { type: 'call' } })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // ターンに進行
       expect(callResponse.body.gameState.stage).toBe('turn');
@@ -1107,10 +1221,14 @@ describe('API Integration - Heads-Up Game Flow', () => {
         stateResponse.body.gameState.currentBettorIndex
       ].id;
 
-      await request(app)
+      let actionResponse = await request(app)
         .post(`/api/v1/rooms/${roomId}/actions`)
         .send({ playerId: currentBettorId, action: { type: 'call' } })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -1121,10 +1239,14 @@ describe('API Integration - Heads-Up Game Flow', () => {
           stateResponse.body.gameState.currentBettorIndex
         ].id;
 
-        await request(app)
+        actionResponse = await request(app)
           .post(`/api/v1/rooms/${roomId}/actions`)
           .send({ playerId: currentBettorId, action: { type: 'check' } })
           .expect(200);
+
+        // アクション後、全プレイヤーから acknowledge を送信
+        activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+        await sendAcknowledgments(app, roomId, activePlayerIds);
       }
 
       // フロップで最初のプレイヤーがチェック
@@ -1138,10 +1260,14 @@ describe('API Integration - Heads-Up Game Flow', () => {
         stateResponse.body.gameState.currentBettorIndex
       ].id;
 
-      await request(app)
+      actionResponse = await request(app)
         .post(`/api/v1/rooms/${roomId}/actions`)
         .send({ playerId: currentBettorId, action: { type: 'check' } })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // 2番目のプレイヤーがベット
       stateResponse = await request(app)
@@ -1152,10 +1278,14 @@ describe('API Integration - Heads-Up Game Flow', () => {
         stateResponse.body.gameState.currentBettorIndex
       ].id;
 
-      await request(app)
+      actionResponse = await request(app)
         .post(`/api/v1/rooms/${roomId}/actions`)
         .send({ playerId: currentBettorId, action: { type: 'raise', amount: 30 } })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // 最初のプレイヤーがリレイズ（チェックレイズ）
       stateResponse = await request(app)
@@ -1174,6 +1304,9 @@ describe('API Integration - Heads-Up Game Flow', () => {
 
       if (raiseResponse.status === 200) {
         expect(raiseResponse.body.gameState).toBeDefined();
+        // アクション後、全プレイヤーから acknowledge を送信
+        activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+        await sendAcknowledgments(app, roomId, activePlayerIds);
       }
     });
 
@@ -1204,10 +1337,14 @@ describe('API Integration - Heads-Up Game Flow', () => {
         stateResponse.body.gameState.currentBettorIndex
       ].id;
 
-      await request(app)
+      let actionResponse = await request(app)
         .post(`/api/v1/rooms/${roomId}/actions`)
         .send({ playerId: currentBettorId, action: { type: 'call' } })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       stateResponse = await request(app)
         .get(`/api/v1/rooms/${roomId}/state`)
@@ -1218,10 +1355,14 @@ describe('API Integration - Heads-Up Game Flow', () => {
           stateResponse.body.gameState.currentBettorIndex
         ].id;
 
-        await request(app)
+        actionResponse = await request(app)
           .post(`/api/v1/rooms/${roomId}/actions`)
           .send({ playerId: currentBettorId, action: { type: 'check' } })
           .expect(200);
+
+        // アクション後、全プレイヤーから acknowledge を送信
+        activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+        await sendAcknowledgments(app, roomId, activePlayerIds);
       }
 
       // フロップでベット
@@ -1233,10 +1374,14 @@ describe('API Integration - Heads-Up Game Flow', () => {
         stateResponse.body.gameState.currentBettorIndex
       ].id;
 
-      await request(app)
+      actionResponse = await request(app)
         .post(`/api/v1/rooms/${roomId}/actions`)
         .send({ playerId: currentBettorId, action: { type: 'raise', amount: 40 } })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // フォールド
       stateResponse = await request(app)
@@ -1251,6 +1396,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         .post(`/api/v1/rooms/${roomId}/actions`)
         .send({ playerId: currentBettorId, action: { type: 'fold' } })
         .expect(200);
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       expect(['ended', 'showdown', 'flop', 'turn']).toContain(foldResponse.body.gameState.stage);
     });
@@ -1847,10 +1996,14 @@ describe('API Integration - Heads-Up Game Flow', () => {
           action = { type: 'check' };
         }
 
-        await request(app)
+        const actionResponse = await request(app)
           .post(`/api/v1/rooms/${roomId}/actions`)
           .send({ playerId: currentBettorId, action })
           .expect(200);
+
+        // アクション後、全プレイヤーから acknowledge を送信
+        const activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+        await sendAcknowledgments(app, roomId, activePlayerIds);
       }
 
       // 最終的なチップ状態を確認
@@ -1953,6 +2106,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         if (actionResponse.status !== 200) {
           break; // エラーまたはゲーム終了
         }
+
+        // アクション後、全プレイヤーから acknowledge を送信
+        const activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+        await sendAcknowledgments(app, roomId, activePlayerIds);
       }
 
       const finalStateResponse = await request(app)
@@ -2014,6 +2171,10 @@ describe('API Integration - Heads-Up Game Flow', () => {
         if (actionResponse.status !== 200) {
           break; // エラーまたはゲーム終了
         }
+
+        // アクション後、全プレイヤーから acknowledge を送信
+        const activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+        await sendAcknowledgments(app, roomId, activePlayerIds);
       }
 
       const finalStateResponse = await request(app)

@@ -60,6 +60,8 @@ const createTestGameState = (
   pots: [],
   totalPot: 100,
   rngState: createRNGState(12345),
+  waitingForAck: false,
+  ackState: O.none,
 });
 
 describe('Stage Transitions', () => {
@@ -345,6 +347,8 @@ describe('Stage Transitions', () => {
       pots: [],
       totalPot: 40,
       rngState: createRNGState(12345),
+      waitingForAck: false,
+      ackState: O.none,
     });
 
     describe('dealFlop in heads-up', () => {
@@ -449,6 +453,8 @@ describe('Stage Transitions', () => {
       pots: [],
       totalPot: 60,
       rngState: createRNGState(12345),
+      waitingForAck: false,
+      ackState: O.none,
     });
 
     it('should set SB as first bettor on flop with dealer=0', () => {

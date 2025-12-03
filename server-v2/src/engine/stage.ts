@@ -3,9 +3,11 @@
  */
 
 import * as E from 'fp-ts/Either';
+import * as O from 'fp-ts/Option';
 import type { GameState, GameError, Card } from './types';
 import { dealCards } from './deck';
 import { resetForNewStreet } from './game-init';
+import { getActivePlayers } from './utils';
 import {
   BURN_CARD_COUNT,
   FLOP_CARD_COUNT,
@@ -65,6 +67,8 @@ export const dealFlop = (state: GameState): E.Either<GameError, GameState> => {
       playerStates: newPlayerStates,
       currentBet: 0,
       currentBettorIndex: firstBettorIndex,
+      waitingForAck: false,
+      ackState: O.none,
     });
   } catch (error) {
     return E.left({
@@ -126,6 +130,8 @@ export const dealTurn = (state: GameState): E.Either<GameError, GameState> => {
       playerStates: newPlayerStates,
       currentBet: 0,
       currentBettorIndex: firstBettorIndex,
+      waitingForAck: false,
+      ackState: O.none,
     });
   } catch (error) {
     return E.left({
@@ -187,6 +193,8 @@ export const dealRiver = (state: GameState): E.Either<GameError, GameState> => {
       playerStates: newPlayerStates,
       currentBet: 0,
       currentBettorIndex: firstBettorIndex,
+      waitingForAck: false,
+      ackState: O.none,
     });
   } catch (error) {
     return E.left({
@@ -218,6 +226,8 @@ export const advanceStage = (
       return E.right({
         ...state,
         stage: 'showdown',
+        waitingForAck: false,
+        ackState: O.none,
       });
 
     case 'showdown':
@@ -235,4 +245,35 @@ export const advanceStage = (
         actual: state.stage,
       });
   }
+};
+
+/**
+ * ステージを進め、ack 待ち状態にする
+ */
+export const advanceStageWithAck = (
+  state: GameState
+): E.Either<GameError, GameState> => {
+  // 既存の advanceStage を呼ぶ
+  const result = advanceStage(state);
+
+  if (E.isLeft(result)) {
+    return result;
+  }
+
+  const newState = result.right;
+
+  // 新しいステージでも ack 待ち状態にする
+  const activePlayers = getActivePlayers(newState);
+
+  return E.right({
+    ...newState,
+    waitingForAck: true,
+    ackState: O.some({
+      expectedAcks: new Set(activePlayers.map((p) => p.id)),
+      receivedAcks: new Set(),
+      startedAt: Date.now(),
+      description: `Stage advanced to ${newState.stage}`,
+      type: 'stage_transition',
+    }),
+  });
 };

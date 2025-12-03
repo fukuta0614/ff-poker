@@ -9,6 +9,7 @@ import request from 'supertest';
 import { io as ioClient, Socket } from 'socket.io-client';
 import { app, httpServer } from '../../src/server';
 import type { PlayerId } from '@engine/types';
+import { getActivePlayerIds, sendAcknowledgments } from '../helpers/testServer';
 
 describe('REST API + WebSocket Integration (Heads-up)', () => {
   let serverPort: number;
@@ -183,11 +184,15 @@ describe('REST API + WebSocket Integration (Heads-up)', () => {
       expect(actionRes.status).toBe(200);
       console.log('Action executed: call');
 
+      // アクション後、全プレイヤーから acknowledge を送信
+      let activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
+
       // WebSocket通知を待つ
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      // 両プレイヤーがaction通知を受信
-      expect(events.filter((e) => e.data.updateType === 'action').length).toBe(2);
+      // 両プレイヤーがaction通知を受信 (call + acknowledges)
+      expect(events.filter((e) => e.data.updateType === 'action').length).toBeGreaterThanOrEqual(2);
 
       // ==========================================
       // Step 8: REST API - 次のアクション実行
@@ -213,6 +218,10 @@ describe('REST API + WebSocket Integration (Heads-up)', () => {
 
       expect(actionRes2.status).toBe(200);
       console.log('Action executed: check');
+
+      // アクション後、全プレイヤーから acknowledge を送信
+      activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
+      await sendAcknowledgments(app, roomId, activePlayerIds);
 
       // WebSocket通知を待つ
       await new Promise((resolve) => setTimeout(resolve, 100));

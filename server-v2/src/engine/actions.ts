@@ -20,7 +20,10 @@ import {
   getCurrentBettor,
   calculateCallAmount,
   getValidActions,
+  getActivePlayers,
+  isBettingComplete,
 } from './utils';
+import { advanceStageWithAck } from './stage';
 
 /**
  * フォールド処理
@@ -417,11 +420,27 @@ const findNextBettor = (
 
 /**
  * プレイヤーアクションを処理
+ *
+ * 変更点:
+ * 1. アクション処理後、waitingForAck を true に設定
+ * 2. ステージ進行は行わず、ack待ち状態にする
  */
 export const processAction = (
   action: PlayerAction,
   state: GameState
 ): E.Either<GameError, GameState> => {
+  // acknowledge アクションの場合は専用処理
+  if (action.type === 'acknowledge') {
+    return processAcknowledgment(action.playerId, state);
+  }
+
+  // すでに ack 待ち状態の場合はエラー
+  if (state.waitingForAck) {
+    return E.left({
+      type: 'WaitingForAcknowledgment',
+    });
+  }
+
   // Validate action first
   const validation = validateAction(action, state);
   if (E.isLeft(validation)) {
@@ -480,8 +499,114 @@ export const processAction = (
     newState.playerStates
   );
 
-  return E.right({
+  const stateWithNextBettor = {
     ...newState,
     currentBettorIndex: nextBettorIndex,
+  };
+
+  // アクション完了後、ack 待ち状態へ遷移
+  const activePlayers = getActivePlayers(stateWithNextBettor);
+
+  return E.right({
+    ...stateWithNextBettor,
+    waitingForAck: true,
+    ackState: O.some({
+      expectedAcks: new Set(activePlayers.map((p) => p.id)),
+      receivedAcks: new Set(),
+      startedAt: Date.now(),
+      description: `Action ${action.type} by ${action.playerId}`,
+      type: 'action',
+    }),
   });
+};
+
+/**
+ * クライアントからの ack を処理
+ *
+ * 動作:
+ * 1. waitingForAck が true か確認
+ * 2. playerId が expectedAcks に含まれるか確認
+ * 3. receivedAcks に追加
+ * 4. 全員から ack が揃ったら、遷移を実行
+ */
+export const processAcknowledgment = (
+  playerId: PlayerId,
+  state: GameState
+): E.Either<GameError, GameState> => {
+  // ack 待ち状態でない場合はエラー
+  if (!state.waitingForAck) {
+    return E.left({
+      type: 'AcknowledgmentNotExpected',
+      playerId,
+    });
+  }
+
+  // ackState が存在しない場合はエラー (不整合)
+  if (O.isNone(state.ackState)) {
+    return E.left({
+      type: 'AcknowledgmentNotExpected',
+      playerId,
+    });
+  }
+
+  const ackState = state.ackState.value;
+
+  // 期待されていない playerId からの ack
+  if (!ackState.expectedAcks.has(playerId)) {
+    return E.left({
+      type: 'AcknowledgmentNotExpected',
+      playerId,
+    });
+  }
+
+  // 既に受信済み
+  if (ackState.receivedAcks.has(playerId)) {
+    return E.left({
+      type: 'AcknowledgmentAlreadyReceived',
+      playerId,
+    });
+  }
+
+  // ack を記録
+  const newReceivedAcks = new Set(ackState.receivedAcks);
+  newReceivedAcks.add(playerId);
+
+  const updatedAckState = {
+    ...ackState,
+    receivedAcks: newReceivedAcks,
+  };
+
+  // まだ全員揃っていない場合
+  if (newReceivedAcks.size < ackState.expectedAcks.size) {
+    return E.right({
+      ...state,
+      ackState: O.some(updatedAckState),
+    });
+  }
+
+  // 全員から ack が揃った → 遷移を実行
+  return resolveAcknowledgment(state);
+};
+
+/**
+ * 全員からの ack を受け取った後の処理
+ *
+ * 動作:
+ * 1. waitingForAck を false に戻す
+ * 2. ackState をクリア
+ * 3. 必要に応じて次のステップへ進む (ベット完了 → ステージ進行)
+ */
+const resolveAcknowledgment = (
+  state: GameState
+): E.Either<GameError, GameState> => {
+  // ack 状態をクリア
+  const clearedState: GameState = {
+    ...state,
+    waitingForAck: false,
+    ackState: O.none,
+  };
+
+  // ack 解決後は通常の状態に戻る
+  // ステージ進行は外部 (GameService) が判断して advanceStageWithAck を呼ぶ
+  return E.right(clearedState);
 };

@@ -54,6 +54,26 @@ function formatGameError(error: GameError): { code: string; message: string } {
         code: 'NO_ACTIVE_PLAYERS',
         message: 'No active players',
       };
+    case 'WaitingForAcknowledgment':
+      return {
+        code: 'WAITING_FOR_ACKNOWLEDGMENT',
+        message: 'Game is waiting for acknowledgment from all players',
+      };
+    case 'AcknowledgmentNotExpected':
+      return {
+        code: 'ACKNOWLEDGMENT_NOT_EXPECTED',
+        message: `Acknowledgment not expected from player: ${error.playerId}`,
+      };
+    case 'AcknowledgmentAlreadyReceived':
+      return {
+        code: 'ACKNOWLEDGMENT_ALREADY_RECEIVED',
+        message: `Acknowledgment already received from player: ${error.playerId}`,
+      };
+    case 'AcknowledgmentTimeout':
+      return {
+        code: 'ACKNOWLEDGMENT_TIMEOUT',
+        message: 'Acknowledgment timeout',
+      };
     default:
       return {
         code: 'UNKNOWN_ERROR',
@@ -74,6 +94,13 @@ function serializeGameState(state: GameState): any {
     minRaiseAmount: state.minRaiseAmount,
     totalPot: state.totalPot,
     communityCards: Array.from(state.communityCards),
+    waitingForAck: state.waitingForAck,
+    ackState: state.ackState && 'value' in state.ackState ? {
+      expectedAcks: Array.from(state.ackState.value.expectedAcks),
+      receivedAcks: Array.from(state.ackState.value.receivedAcks),
+      startedAt: state.ackState.value.startedAt,
+      description: state.ackState.value.description,
+    } : undefined,
     players: Array.from(state.players.values()).map((player) => {
       const playerState = state.playerStates.get(player.id);
       return {
@@ -164,11 +191,11 @@ export function createActionsRouter(
         });
       }
 
-      if (!action.type || !['fold', 'check', 'call', 'raise', 'allin'].includes(action.type)) {
+      if (!action.type || !['fold', 'check', 'call', 'raise', 'allin', 'acknowledge'].includes(action.type)) {
         return res.status(400).json({
           error: {
             code: 'INVALID_REQUEST',
-            message: 'action.type must be one of: fold, check, call, raise, allin',
+            message: 'action.type must be one of: fold, check, call, raise, allin, acknowledge',
           },
         });
       }
