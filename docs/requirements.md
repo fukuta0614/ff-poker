@@ -254,9 +254,21 @@ Web技術を用いて、複数プレイヤーが同時に参加可能な公平�
 ### 3.3 保守性
 
 #### NFR-201: テストカバレッジ
-- **Server**: 80% 以上(unit + integration)
-- **Client**: 70% 以上(unit + integration)
-- **E2E**: 主要シナリオ(ゲーム開始→ラウンド終了)を網羅
+
+**5層テストレイヤー構成**:
+
+| レイヤー | 対象 | ツール | カバレッジ目標 |
+|---------|------|-------|--------------|
+| **Server Unit** | game_engine, Room, services | Jest | 80% |
+| **Server Integration** | socketHandler + Room + game_engine | Jest + socket.io-client | 70% |
+| **Client Unit** | コンポーネント, フック | Vitest + React Testing Library | 70% |
+| **Client Integration** | Socket通信 + State管理 | Vitest + WebSocketモック | 60% |
+| **E2E** | 完全なゲームフロー | Playwright | 主要シナリオ網羅 |
+
+**カバレッジ目標**:
+- **Server**: branches/functions/lines/statements すべて 80% 以上
+- **Client**: branches/functions/lines/statements すべて 70% 以上
+- **E2E**: 主要シナリオ(ルーム作成→ゲーム開始→ラウンド終了)を網羅
 
 #### NFR-202: コード品質
 - TypeScript strict mode 有効
@@ -325,30 +337,126 @@ Web技術を用いて、複数プレイヤーが同時に参加可能な公平�
 
 ## 6. 開発フェーズ
 
-### Phase 1: コア実装(優先度: 高)
-- game_engine モジュールの実装
-- Room管理モジュールの実装
-- WebSocket通信層の実装
-- 基本UI(ルーム作成、参加、ゲーム画面)
-- Unit/Integrationテスト
+### Phase 1: コア実装(優先度: 高) 🎯
+
+**目標**: 基本的なゲームフローを実装し、TDDで品質を担保する
+
+#### 6.1.1 game_engine実装
+- [ ] GameState型定義
+- [ ] startRound関数 (ラウンド開始)
+- [ ] executeAction関数 (アクション実行)
+- [ ] isBettingComplete関数 (ベッティング完了判定)
+- [ ] advanceStreet関数 (ストリート進行)
+- [ ] performShowdown関数 (ショーダウン)
+- [ ] HandEvaluator (役判定)
+- [ ] PotCalculator (ポット計算)
+- [ ] Deck (デッキ管理)
+- [ ] Unit test (カバレッジ 90%以上目標)
+
+#### 6.1.2 Room管理実装
+- [ ] RoomManager (ルーム管理)
+- [ ] Room (単一ルーム状態管理)
+- [ ] game_engineとの統合
+- [ ] Unit test (カバレッジ 80%以上)
+
+#### 6.1.3 WebSocket通信層実装
+- [ ] socketHandler (イベントハンドラ)
+- [ ] バリデーション (入力検証)
+- [ ] エラーハンドリング
+- [ ] Integration test (通信フロー)
+
+#### 6.1.4 基本UI実装
+- [ ] Lobby (ルーム作成・参加)
+- [ ] Room (ゲーム画面)
+- [ ] Card (カード表示)
+- [ ] ActionButtons (アクションボタン)
+- [ ] SocketContext (Socket.io接続管理)
+- [ ] GameContext (状態管理)
+- [ ] Unit test (コンポーネント)
+
+**完了基準**:
+- 2-6人でゲームが正常に動作する
+- テストカバレッジがServer 80%, Client 70%を達成
+- ルーム作成→ゲーム開始→ラウンド終了が完了する
+
+---
 
 ### Phase 2: UX改善(優先度: 中)
-- 楽観的更新の実装
-- 再接続機能
-- ターンタイムアウト
-- エラーハンドリング強化
+
+**目標**: ユーザー体験を向上させる
+
+#### 6.2.1 楽観的更新
+- [ ] useOptimisticUpdate フック
+- [ ] useGameActions フック
+- [ ] GameContext に楽観的更新ロジック追加
+- [ ] エラー時のロールバック処理
+
+#### 6.2.2 再接続機能
+- [ ] SessionManager (グレースピリオド 120秒)
+- [ ] 再接続フロー実装
+- [ ] ゲーム状態・手札の復元
+- [ ] Integration test (再接続シナリオ)
+
+#### 6.2.3 ターンタイムアウト
+- [ ] TurnTimerManager (60秒タイムアウト)
+- [ ] タイマー更新イベント (1秒毎)
+- [ ] 警告表示 (残り10秒)
+- [ ] 自動フォールド処理
+
+#### 6.2.4 エラーハンドリング強化
+- [ ] エラー型定義 (GameError, ValidationError, TurnError)
+- [ ] エラーメッセージの統一
+- [ ] エラー通知UI
+
+**完了基準**:
+- アクション実行が即座にUIに反映される
+- 再接続成功率 90%以上
+- タイムアウトが正常に動作する
+
+---
 
 ### Phase 3: 本番対応(優先度: 中)
-- Redis統合(マルチサーバー)
-- ロギング・監視
-- デプロイ設定(Netlify/Render)
-- E2Eテスト
+
+**目標**: 本番環境での運用準備
+
+#### 6.3.1 Redis統合
+- [ ] @socket.io/redis-adapter 導入
+- [ ] セッション・ゲーム状態の永続化
+- [ ] マルチサーバー構成対応
+
+#### 6.3.2 ロギング・監視
+- [ ] LoggerService (winston統合)
+- [ ] 構造化ログ (JSON形式)
+- [ ] エラートラッキング (Sentry等)
+
+#### 6.3.3 デプロイ設定
+- [ ] Netlify設定 (Client)
+- [ ] Render設定 (Server)
+- [ ] 環境変数管理
+- [ ] CI/CD (GitHub Actions)
+
+#### 6.3.4 E2Eテスト
+- [ ] Playwright E2Eテスト
+- [ ] 主要シナリオカバー
+- [ ] CI統合
+
+**完了基準**:
+- 本番環境でデプロイ可能
+- ロギングが正常に動作
+- E2Eテストが通る
+
+---
 
 ### Phase 4: 将来拡張(優先度: 低)
-- ゲーム履歴保存(PostgreSQL)
-- 統計情報表示
-- アニメーション(framer-motion)
-- モバイル対応
+
+**目標**: 機能拡張と改善
+
+- [ ] ゲーム履歴保存(PostgreSQL)
+- [ ] 統計情報表示
+- [ ] アニメーション(framer-motion)
+- [ ] モバイル対応
+- [ ] チャット機能強化
+- [ ] 観戦モード
 
 ---
 

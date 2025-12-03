@@ -232,38 +232,139 @@ server/src/game_engine/
 
 ### 3.1 ディレクトリ構成
 
+#### Server (server/)
+
 ```
 server/
 ├── src/
-│   ├── game_engine/      # ゲームロジック(stateless)
-│   ├── room/             # Room管理(stateful)
-│   │   ├── RoomManager.ts
-│   │   └── Room.ts
-│   ├── socket/           # WebSocket通信層
-│   │   └── socketHandler.ts
-│   ├── services/         # サービス層
-│   │   ├── SessionManager.ts
-│   │   ├── TurnTimerManager.ts
-│   │   └── LoggerService.ts
-│   ├── types/            # 型定義
-│   │   ├── socket.ts
-│   │   └── errors.ts
-│   ├── utils/            # ユーティリティ
-│   │   ├── constants.ts
-│   │   └── validation.ts
-│   ├── app.ts            # Express設定
-│   └── server.ts         # サーバー起動
+│   ├── game_engine/           # ゲームロジック(stateless)
+│   │   ├── index.ts           # 主要関数エクスポート
+│   │   ├── state.ts           # GameState型定義
+│   │   ├── actions.ts         # executeAction実装
+│   │   ├── betting.ts         # ベッティングロジック
+│   │   ├── street.ts          # ストリート進行
+│   │   ├── showdown.ts        # ショーダウン処理
+│   │   ├── hand-evaluator.ts  # 役判定 (pokersolver wrapper)
+│   │   ├── pot-calculator.ts  # ポット・サイドポット計算
+│   │   ├── deck.ts            # デッキ管理 (Fisher-Yates)
+│   │   └── utils.ts           # ユーティリティ関数
+│   │
+│   ├── room/                  # Room管理(stateful)
+│   │   ├── RoomManager.ts     # 複数ルーム管理
+│   │   └── Room.ts            # 単一ルーム状態管理
+│   │
+│   ├── socket/                # WebSocket通信層
+│   │   └── socketHandler.ts   # Socket.ioイベントハンドラ
+│   │
+│   ├── services/              # サービス層
+│   │   ├── SessionManager.ts  # セッション管理 (120秒グレースピリオド)
+│   │   ├── TurnTimerManager.ts # ターンタイムアウト (60秒)
+│   │   └── LoggerService.ts   # winston統合ロギング
+│   │
+│   ├── types/                 # 型定義
+│   │   ├── socket.ts          # Socket.io関連型
+│   │   └── errors.ts          # エラー型 (GameError, ValidationError, TurnError)
+│   │
+│   ├── utils/                 # ユーティリティ
+│   │   ├── constants.ts       # 定数定義 (MAX_PLAYERS, DEFAULT_CHIPS等)
+│   │   └── validation.ts      # 入力バリデーション (XSS対策)
+│   │
+│   ├── app.ts                 # Express設定
+│   └── server.ts              # サーバー起動エントリー
+│
 ├── test/
-│   ├── unit/             # 単体テスト
-│   │   ├── game_engine/  # game_engine各モジュール
-│   │   ├── room/         # Room管理
-│   │   └── services/     # SessionManager等
-│   └── integration/      # 統合テスト
-│       ├── game-flow.test.ts
-│       └── reconnect.test.ts
+│   ├── unit/                  # 単体テスト (カバレッジ 80%以上)
+│   │   ├── game_engine/
+│   │   │   ├── actions.test.ts
+│   │   │   ├── betting.test.ts
+│   │   │   ├── street.test.ts
+│   │   │   ├── showdown.test.ts
+│   │   │   ├── hand-evaluator.test.ts
+│   │   │   ├── pot-calculator.test.ts
+│   │   │   └── deck.test.ts
+│   │   ├── room/
+│   │   │   ├── RoomManager.test.ts
+│   │   │   └── Room.test.ts
+│   │   └── services/
+│   │       ├── SessionManager.test.ts
+│   │       ├── TurnTimerManager.test.ts
+│   │       └── LoggerService.test.ts
+│   │
+│   └── integration/           # 統合テスト (カバレッジ 70%以上)
+│       ├── game-flow.test.ts  # 完全ゲームフロー
+│       ├── reconnect.test.ts  # 再接続シナリオ
+│       └── socketHandler.test.ts # Socket.ioイベント
+│
 ├── package.json
 ├── tsconfig.json
-└── jest.config.js
+├── tsconfig.build.json
+├── jest.config.js
+├── nodemon.json
+├── .eslintrc.json
+├── .prettierrc.json
+├── .env.example
+└── .gitignore
+```
+
+#### Client (client/)
+
+```
+client/
+├── src/
+│   ├── components/            # Reactコンポーネント
+│   │   ├── Lobby.tsx          # ルーム作成・参加画面
+│   │   ├── Room.tsx           # ゲームルーム主画面
+│   │   ├── Card.tsx           # トランプカード表示 (SVG)
+│   │   ├── PlayerInfo.tsx     # プレイヤー情報表示
+│   │   └── ActionButtons.tsx  # アクションボタン
+│   │
+│   ├── contexts/              # Context API
+│   │   ├── SocketContext.tsx  # Socket.io接続管理
+│   │   └── GameContext.tsx    # ゲーム状態管理 (useReducer)
+│   │
+│   ├── hooks/                 # カスタムフック
+│   │   ├── useOptimisticUpdate.ts # 楽観的更新ロジック
+│   │   └── useGameActions.ts  # アクション送信・ロールバック
+│   │
+│   ├── types/                 # 型定義
+│   │   └── game.ts            # ゲーム関連型
+│   │
+│   ├── utils/                 # ユーティリティ
+│   │   └── card-utils.ts      # カード関連ユーティリティ
+│   │
+│   ├── main.tsx               # Viteエントリー
+│   ├── App.tsx                # ルーティング定義
+│   └── test-setup.ts          # テストセットアップ
+│
+├── test/
+│   ├── unit/                  # 単体テスト (カバレッジ 70%以上)
+│   │   ├── components/
+│   │   │   ├── Lobby.test.tsx
+│   │   │   ├── Room.test.tsx
+│   │   │   ├── Card.test.tsx
+│   │   │   └── ActionButtons.test.tsx
+│   │   └── hooks/
+│   │       ├── useOptimisticUpdate.test.ts
+│   │       └── useGameActions.test.ts
+│   │
+│   ├── integration/           # 統合テスト (カバレッジ 60%以上)
+│   │   └── game-flow.test.tsx # Socket通信 + State管理
+│   │
+│   └── e2e/                   # E2Eテスト (Playwright)
+│       └── two-player-game.spec.ts # 2人ゲームシナリオ
+│
+├── public/                    # 静的ファイル
+├── index.html
+├── package.json
+├── tsconfig.json
+├── tsconfig.node.json
+├── vite.config.ts
+├── vitest.config.ts
+├── playwright.config.ts
+├── eslint.config.js
+├── .prettierrc.json
+├── .env.example
+└── .gitignore
 ```
 
 ### 3.2 Room管理設計
