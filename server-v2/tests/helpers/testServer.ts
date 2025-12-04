@@ -41,7 +41,7 @@ export function createTestApp() {
   });
 
   // OpenAPI仕様書の読み込み
-  const openApiPath = path.join(__dirname, '../../src/api', 'openapi.yaml');
+  const openApiPath = path.join(__dirname, '../..', 'openapi.yaml');
   const openApiSpec = YAML.parse(fs.readFileSync(openApiPath, 'utf8'));
 
   // Swagger UI設定

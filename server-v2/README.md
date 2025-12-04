@@ -129,9 +129,9 @@ FF Poker Server v2は、テキサスホールデムポーカーのマルチプ�
 
 ```
 server-v2/
+├── openapi.yaml                  # OpenAPI 3.0仕様書
 ├── src/
 │   ├── api/
-│   │   ├── openapi.yaml          # OpenAPI 3.0仕様書
 │   │   └── routes/
 │   │       ├── rooms.ts          # ルーム管理API
 │   │       └── actions.ts        # ゲームアクションAPI
@@ -308,7 +308,7 @@ curl -X POST http://localhost:3001/api/v1/rooms/room-abc123/actions \
 
 完全なAPI仕様は以下で確認できます:
 - **Swagger UI**: http://localhost:3001/api-docs (サーバー起動後)
-- **YAML**: [src/api/openapi.yaml](./src/api/openapi.yaml)
+- **YAML**: [openapi.yaml](./openapi.yaml)
 
 ### エンドポイント一覧
 

@@ -288,7 +288,7 @@ components:
           properties:
             type:
               type: string
-              enum: [fold, check, call, raise, allin]
+              enum: [fold, check, call, raise, allin, acknowledge]
               example: "raise"
             amount:
               type: number
@@ -326,6 +326,7 @@ components:
         - totalPot
         - communityCards
         - players
+        - waitingForAck
       properties:
         stage:
           type: string
@@ -351,6 +352,12 @@ components:
           items:
             type: string
           example: []
+        waitingForAck:
+          type: boolean
+          description: ゲームがプレイヤーからの確認応答を待っているかどうか
+          example: false
+        ackState:
+          $ref: '#/components/schemas/AckState'
         players:
           type: array
           items:
@@ -432,6 +439,36 @@ components:
           type: array
           items:
             type: string
+
+    AckState:
+      type: object
+      description: 確認応答の状態（waitingForAck=trueの場合のみ存在）
+      required:
+        - expectedAcks
+        - receivedAcks
+        - startedAt
+        - description
+      properties:
+        expectedAcks:
+          type: array
+          items:
+            type: string
+          description: 確認応答を待っているプレイヤーIDのリスト
+          example: ["player-123", "player-456"]
+        receivedAcks:
+          type: array
+          items:
+            type: string
+          description: 確認応答を受け取ったプレイヤーIDのリスト
+          example: ["player-123"]
+        startedAt:
+          type: number
+          description: 確認応答待ち開始時刻（Unix timestamp）
+          example: 1733270400000
+        description:
+          type: string
+          description: 確認応答を待っている理由
+          example: "Waiting for showdown acknowledgment"
 
     ErrorResponse:
       type: object
