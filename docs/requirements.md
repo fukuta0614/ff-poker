@@ -1,8 +1,11 @@
 # FF Poker - 要件定義書 (v2.0)
 
 **作成日**: 2025-12-02
+**最終更新**: 2025-12-10
 **バージョン**: 2.0
-**ステータス**: Draft
+**ステータス**: Server Implementation Complete
+
+> **実装状況**: server-v2/ として完全実装済み (273テスト全通過)。クライアントは未実装。
 
 ---
 
@@ -15,17 +18,39 @@
 リアルタイムマルチプレイヤーテキサスホールデムポーカーゲームの実装。
 Web技術を用いて、複数プレイヤーが同時に参加可能な公平で高速なポーカーゲーム体験を提供する。
 
+**実装完了機能**:
+- ✅ 純粋関数型ゲームエンジン (fp-ts based)
+- ✅ REST API (OpenAPI 3.0準拠)
+- ✅ WebSocket通知 (Socket.io)
+- ✅ Acknowledgment-based同期システム
+- ✅ 完全なテストカバレッジ (273テスト)
+
 ### 1.3 ターゲットユーザー
 - ポーカーを楽しみたい一般ユーザー
 - 友人グループでのオンライン対戦
 - ポーカー学習者
 
 ### 1.4 技術スタック
-- **フロントエンド**: React 18 + TypeScript + Vite
-- **バックエンド**: Node.js 20 + Express + Socket.io
-- **テストフレームワーク**: Jest (server), Vitest (client), Playwright (E2E)
+
+#### サーバーサイド (実装済み)
+- **ランタイム**: Node.js 20 LTS
+- **フレームワーク**: Express
+- **WebSocket**: Socket.io
+- **関数型プログラミング**: fp-ts
+- **役判定**: pokersolver
+- **テスト**: Jest + supertest
+- **API仕様**: OpenAPI 3.0
+
+#### クライアントサイド (未実装)
+- **フレームワーク**: React 18 + TypeScript
+- **ビルドツール**: Vite
+- **テスト**: Vitest + React Testing Library
+- **E2E**: Playwright
 - **スタイリング**: Tailwind CSS
-- **デプロイ**: Netlify (client), Render (server)
+
+#### デプロイ
+- **クライアント**: Netlify (予定)
+- **サーバー**: Render (予定)
 
 ---
 
@@ -135,18 +160,37 @@ Web技術を用いて、複数プレイヤーが同時に参加可能な公平�
 
 ### 2.2 通信機能
 
-#### FR-101: クライアント-サーバー通信(WebSocket)
+#### FR-101: クライアント-サーバー通信 (REST API + WebSocket)
 **優先度**: 高
+**実装状況**: ✅ 完了 (OpenAPI 3.0準拠)
+
 **EARS形式**:
-- クライアントがアクションを送信する場合、システムは `{ success: boolean, error?: string }` 形式でレスポンスを返す
-- サーバーはゲーム状態の更新を `stateUpdated` イベントで全クライアントにブロードキャストする
-- 手札配布は個別送信で実施する
+- クライアントがアクションを実行する場合、REST API経由でリクエストを送信する
+- サーバーはHTTPステータスコード (201 Created / 400 Bad Request / 404 Not Found) でレスポンスを返す
+- サーバーはゲーム状態の更新を `room:updated` WebSocketイベントで全クライアントに通知する
+- クライアントは通知受信後、必要に応じてREST APIで最新状態を取得する
 
 **受け入れ基準**:
-- [x] Action → Response のシンプルなIF
-- [x] `stateUpdated` イベントによる状態同期
-- [x] 手札情報の個別送信(セキュリティ)
-- [x] エラーハンドリング
+- [x] REST API エンドポイント (OpenAPI 3.0仕様書)
+- [x] WebSocket `room:updated` イベント通知
+- [x] プレイヤー視点のGameState取得 (手札フィルタリング)
+- [x] エラーハンドリング (型安全なGameError)
+
+#### FR-102: Acknowledgment-based同期システム
+**優先度**: 高
+**実装状況**: ✅ 完了 (server-v2/ACKNOWLEDGMENT_SYNC_DESIGN.md)
+
+**EARS形式**:
+- 任意のアクションまたはステージ遷移が発生した場合、システムは全クライアントの確認応答を待つ
+- 全クライアントが `acknowledge` アクションを送信するまで、システムは次の処理に進まない
+- タイムアウト処理は将来実装する (TODO)
+
+**受け入れ基準**:
+- [x] GameStateに `waitingForAck` フラグ
+- [x] GameStateに `ackState` (expectedAcks, receivedAcks)
+- [x] `acknowledge` アクションタイプ
+- [x] 全クライアント確認後に次ステップへ進行
+- [ ] タイムアウト処理 (TODO)
 
 #### FR-102: 楽観的更新(Optimistic Update)
 **優先度**: 中

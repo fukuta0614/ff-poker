@@ -1,8 +1,28 @@
 # FF Poker - 設計書 (v2.0)
 
 **作成日**: 2025-12-02
+**最終更新**: 2025-12-10
 **バージョン**: 2.0
-**ステータス**: Draft
+**ステータス**: Implementation Complete (server-v2)
+
+> **重要**: このドキュメントは server-v2/ の実装に基づいています。
+>
+> **サーバー実装状況**:
+> - ✅ Pure Functional Engine (fp-ts): 190テスト, 96%カバレッジ
+> - ✅ REST API (OpenAPI 3.0): 完全実装
+> - ✅ WebSocket Notifications: 実装済み
+> - ✅ Acknowledgment System: 全クライアント同期機能
+> - ✅ 統合テスト: 48テスト (273/273 全通過)
+>
+> **クライアント実装状況**:
+> - ⏳ 未実装 (server-v2 API に接続する必要あり)
+>
+> **参照ドキュメント**:
+> - [server-v2/README.md](../server-v2/README.md): サーバー概要
+> - [server-v2/ACKNOWLEDGMENT_SYNC_DESIGN.md](../server-v2/ACKNOWLEDGMENT_SYNC_DESIGN.md): Acknowledgment設計書
+> - [server-v2/GAME_FLOW_SEQUENCE.md](../server-v2/GAME_FLOW_SEQUENCE.md): ゲームフローシーケンス
+> - [server-v2/TEST_SCENARIOS.md](../server-v2/TEST_SCENARIOS.md): テストシナリオ一覧
+> - [server-v2/openapi.yaml](../server-v2/openapi.yaml): REST API仕様書
 
 ---
 
@@ -28,39 +48,66 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                         Client (React)                       │
 │  ┌─────────────┐  ┌──────────────┐  ┌──────────────────┐   │
-│  │   UI Layer  │  │ State Layer  │  │  Socket Client   │   │
-│  │ (Components)│─▶│ (Context API)│─▶│   (Socket.io)    │   │
+│  │   UI Layer  │  │ State Layer  │  │  API Client +    │   │
+│  │ (Components)│─▶│ (Context API)│─▶│  Socket Client   │   │
 │  └─────────────┘  └──────────────┘  └──────────────────┘   │
 └────────────────────────────────┬────────────────────────────┘
-                                 │ WebSocket
-                                 │ (Socket.io)
+                                 │ REST API (actions)
+                                 │ WebSocket (notifications)
 ┌────────────────────────────────▼────────────────────────────┐
-│                       Server (Node.js)                       │
+│                    Server (Node.js + Express)                │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │Socket Handler│─▶│ Room Manager │─▶│   game_engine    │  │
-│  │  (Events)    │  │  (Stateful)  │  │   (Stateless)    │  │
-│  └──────────────┘  └──────────────┘  └──────────────────┘  │
-│                                                               │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │
-│  │   Session    │  │Turn Timer    │  │     Logger       │  │
-│  │   Manager    │  │   Manager    │  │   (winston)      │  │
-│  └──────────────┘  └──────────────┘  └──────────────────┘  │
+│  │  REST API    │  │  WebSocket   │  │   GameService    │  │
+│  │ (OpenAPI 3.0)│  │  (Notifier)  │  │   (Business)     │  │
+│  └──────┬───────┘  └──────┬───────┘  └─────────┬────────┘  │
+│         │                 │                     │            │
+│         └─────────────────┴─────────────────────┘            │
+│                           │                                   │
+│                  ┌────────▼──────────┐                       │
+│                  │  GameManagerV2    │                       │
+│                  │   (Room State)    │                       │
+│                  └────────┬──────────┘                       │
+│                           │                                   │
+│                  ┌────────▼──────────┐                       │
+│                  │  Pure Engine      │                       │
+│                  │  (fp-ts based)    │                       │
+│                  └───────────────────┘                       │
 └───────────────────────────────────────────────────────────────┘
 ```
 
 ### 1.2 レイヤー責務
 
-| レイヤー | 責務 | Stateful/Stateless |
-|---------|------|--------------------|
-| **Client UI** | ユーザーインタラクション、表示 | Stateful |
-| **Client State** | ゲーム状態管理、楽観的更新 | Stateful |
-| **Socket Client** | WebSocket通信 | Stateless |
-| **Socket Handler** | イベント受信・送信 | Stateless |
-| **Room Manager** | ルーム・プレイヤー管理 | Stateful |
-| **game_engine** | ゲームロジック(純粋関数) | **Stateless** |
-| **Session Manager** | 再接続セッション管理 | Stateful |
-| **Turn Timer** | ターンタイムアウト管理 | Stateful |
-| **Logger** | ロギング | Stateless |
+| レイヤー | 責務 | Stateful/Stateless | 備考 |
+|---------|------|--------------------| -----|
+| **Client UI** | ユーザーインタラクション、表示 | Stateful | React Components |
+| **Client State** | ゲーム状態管理、acknowledgment処理 | Stateful | Context API |
+| **API Client** | REST API呼び出し | Stateless | axios/fetch |
+| **Socket Client** | WebSocket通知受信 | Stateless | Socket.io-client |
+| **REST API** | HTTPエンドポイント処理 | Stateless | Express Router |
+| **WebSocket Notifier** | リアルタイム通知送信 | Stateless | Socket.io |
+| **GameService** | ビジネスロジック調整 | Stateless | Service層 |
+| **GameManagerV2** | ルーム・プレイヤー状態管理 | Stateful | Singleton |
+| **Engine (Pure)** | ゲームロジック(純粋関数) | **Stateless** | fp-ts/Either |
+
+### 1.3 通信パターン
+
+#### アクション実行フロー
+```
+Client → REST API POST /api/v1/rooms/:roomId/actions
+       → GameService.executeAction()
+       → GameManager.updateState()
+       → Engine.processAction() [純粋関数]
+       → WebSocket broadcast 'room:updated' [全クライアント]
+       ← Client receives notification
+       ← Client sends acknowledge action
+       → Engine resolves acknowledgment
+       → WebSocket broadcast 'room:updated' [ready for next]
+```
+
+#### Acknowledgment-based Synchronization
+すべてのアクションとステージ遷移は、全クライアントが acknowledgment を送信するまで次のステップに進みません。これにより、アニメーション表示やネットワーク遅延に対応した同期を実現します。
+
+詳細は [server-v2/ACKNOWLEDGMENT_SYNC_DESIGN.md](../server-v2/ACKNOWLEDGMENT_SYNC_DESIGN.md) を参照してください。
 
 ---
 
@@ -68,243 +115,338 @@
 
 ### 2.1 コンセプト
 
-**game_engine** は、ゲームロジックを司る**純粋関数の集合**として設計する。
+**game_engine** は、ゲームロジックを司る**純粋関数の集合**として実装済みです。
+
+**実装済みの特徴**:
+1. **完全な不変性**: 全ての状態は `readonly`、副作用なし
+2. **fp-ts による型安全**: `Either` でエラーハンドリング、`Option` でnull安全性
+3. **100% 型安全**: `any`型は一切使用していません
+4. **テスト駆動開発**: 190テスト全通過、カバレッジ96%
+5. **決定的な乱数生成**: RNG状態もGameStateに含まれ、完全に再現可能
 
 **設計原則**:
 1. **Stateless**: 状態を保持しない
-2. **Pure Functions**: `(currentState, action) → nextState`
+2. **Pure Functions**: `(currentState, action) → Either<GameError, nextState>`
 3. **Testable**: 副作用がないため、unit testが容易
 4. **Deterministic**: 同じ入力は常に同じ出力
 
 ### 2.2 game_engineの責務範囲
 
-**含む**:
-- ベッティングロジック(fold, check, call, bet, raise, allin)
-- ベッティング完了判定
-- ストリート進行(preflop → flop → turn → river → showdown)
-- 役判定(HandEvaluator)
-- ポット・サイドポット計算(PotCalculator)
-- デッキ管理・カード配布
-- 勝者決定
+**実装済み**:
+- ✅ ベッティングロジック(fold, check, call, raise, allin)
+- ✅ Acknowledgment システム(全クライアント同期)
+- ✅ ベッティング完了判定
+- ✅ ステージ進行(preflop → flop → turn → river → showdown)
+- ✅ 役判定(pokersolver wrapper)
+- ✅ ポット・サイドポット計算
+- ✅ デッキ管理・シャッフル(Fisher-Yates)
+- ✅ 決定的カード配布(RNG state管理)
+- ✅ ショーダウン処理と勝者決定
 
-**含まない**:
-- Room管理(プレイヤー追加/削除、ルーム作成)
-- Socket.io送信
-- タイマー管理
-- ロギング
-- セッション管理
+**含まない**(上位層の責務):
+- Room管理(プレイヤー追加/削除、ルーム作成) → GameManagerV2
+- HTTP/WebSocket通信 → API/Notifier層
+- タイマー管理 → 未実装(TODO)
+- ロギング → winston
+- セッション管理 → 未実装(TODO)
 
 ### 2.3 game_engine API設計
 
-#### 型定義
+> **実装済み**: 以下の型定義と関数は server-v2/src/engine/ に実装済みです。
+
+#### 型定義 (fp-ts based)
 
 ```typescript
-// ゲーム状態
-type GameState = {
-  // ラウンド情報
-  roundId: string;
-  stage: 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
+import { Option } from 'fp-ts/Option';
+import { Either } from 'fp-ts/Either';
 
-  // プレイヤー情報
-  players: PlayerState[];
-  dealerIndex: number;
-  currentBettorIndex: number;
+// 基本型
+export type PlayerId = string;
+export type Card = string; // "As", "Kh" など
+export type ActionType = 'fold' | 'check' | 'call' | 'raise' | 'allin' | 'acknowledge';
+export type Stage = 'preflop' | 'flop' | 'turn' | 'river' | 'showdown' | 'ended';
 
-  // カード情報
-  deck: string[];  // 残りのカード
-  communityCards: string[];
-  playerHands: Record<string, [string, string]>;  // playerId → hand
+// プレイヤー型
+export interface Player {
+  readonly id: PlayerId;
+  readonly name: string;
+  readonly chips: number;
+  readonly seat: number;
+}
 
-  // ベッティング情報
-  pot: number;
-  playerBets: Record<string, number>;  // 現在ストリートのベット額
-  cumulativeBets: Record<string, number>;  // 全ストリート合計
-  currentBet: number;  // 現在のベット額
-  minRaiseAmount: number;
+export interface PlayerState {
+  readonly bet: number; // 現在のストリートのベット額
+  readonly cumulativeBet: number; // 累積ベット額（全ストリート）
+  readonly isFolded: boolean;
+  readonly hasActed: boolean;
+  readonly isAllIn: boolean;
+  readonly hand: Option<readonly [Card, Card]>; // ホールカード (fp-ts/Option)
+}
 
-  // プレイヤー状態
-  folded: Set<string>;  // playerId
-  allIn: Set<string>;  // playerId
-  hasActed: Set<string>;  // playerId
+// Acknowledgment 型 (重要: 全クライアント同期機能)
+export interface AcknowledgmentState {
+  readonly expectedAcks: ReadonlySet<PlayerId>;
+  readonly receivedAcks: ReadonlySet<PlayerId>;
+  readonly startedAt: number;
+  readonly description: string;
+  readonly type: 'action' | 'stage_transition';
+}
 
-  // ブラインド情報
-  smallBlind: number;
-  bigBlind: number;
-  smallBlindPlayerId: string;
-  bigBlindPlayerId: string;
-};
+// ポット型
+export interface Pot {
+  readonly amount: number;
+  readonly eligiblePlayers: ReadonlySet<PlayerId>;
+}
 
-type PlayerState = {
-  id: string;
-  name: string;
-  chips: number;
-  seat: number;
-};
+// RNG型 (決定的乱数生成)
+export interface RNGState {
+  readonly seed: number;
+}
+
+// ゲーム状態型 (完全に不変)
+export interface GameState {
+  readonly players: ReadonlyMap<PlayerId, Player>;
+  readonly playerStates: ReadonlyMap<PlayerId, PlayerState>;
+  readonly stage: Stage;
+  readonly dealerIndex: number;
+  readonly currentBettorIndex: number;
+  readonly deck: readonly Card[];
+  readonly communityCards: readonly Card[];
+  readonly currentBet: number;
+  readonly minRaiseAmount: number;
+  readonly lastAggressorId: Option<PlayerId>;
+  readonly pots: readonly Pot[];
+  readonly totalPot: number;
+  readonly rngState: RNGState; // 乱数生成器の状態
+
+  // Acknowledgment 関連 (重要)
+  readonly waitingForAck: boolean;
+  readonly ackState: Option<AcknowledgmentState>;
+}
 
 // アクション定義
-type PlayerAction =
-  | { type: 'fold' }
-  | { type: 'check' }
-  | { type: 'call' }
-  | { type: 'bet'; amount: number }
-  | { type: 'raise'; amount: number }
-  | { type: 'allin' };
+export interface PlayerAction {
+  readonly playerId: PlayerId;
+  readonly type: ActionType;
+  readonly amount?: number; // raise時のみ必須
+}
 
-// game_engine結果
-type GameEngineResult = {
-  nextState: GameState;
-  events: GameEvent[];
-};
+// エラー型 (型安全なエラーハンドリング)
+export type GameError =
+  | { type: 'InvalidTurn'; playerId: PlayerId; expectedPlayerId: PlayerId }
+  | { type: 'PlayerNotFound'; playerId: PlayerId }
+  | { type: 'PlayerAlreadyFolded'; playerId: PlayerId }
+  | { type: 'InvalidAction'; action: ActionType; reason: string }
+  | { type: 'InsufficientChips'; required: number; available: number }
+  | { type: 'InvalidBetAmount'; amount: number; minimum: number }
+  | { type: 'GameNotInProgress'; currentStage: Stage }
+  | { type: 'InvalidStage'; expected: Stage; actual: Stage }
+  | { type: 'InsufficientCards'; required: number; available: number }
+  | { type: 'NoActivePlayers' }
+  | { type: 'BettingNotComplete' }
+  | { type: 'DuplicateAcknowledgment'; playerId: PlayerId }
+  | { type: 'UnexpectedAcknowledgment'; playerId: PlayerId }
+  | { type: 'NotWaitingForAck' };
 
-type GameEvent =
-  | { type: 'actionPerformed'; playerId: string; action: PlayerAction; newPot: number }
-  | { type: 'turnChanged'; playerId: string; validActions: string[] }
-  | { type: 'streetChanged'; stage: string; communityCards: string[] }
-  | { type: 'showdown'; winners: Winner[]; sidePots: SidePot[] }
-  | { type: 'roundEnded'; winners: Winner[] };
+// 役評価結果
+export interface HandEvaluation {
+  readonly rank: number;
+  readonly name: string;
+  readonly cards: readonly Card[];
+}
 
-type Winner = {
-  playerId: string;
-  amount: number;
-  hand?: {
-    rank: number;
-    name: string;
-    cards: string[];
-  };
-};
+// ショーダウン結果
+export interface WinnerInfo {
+  readonly playerId: PlayerId;
+  readonly potIndex: number;
+  readonly amount: number;
+  readonly evaluation: HandEvaluation;
+}
 
-type SidePot = {
-  amount: number;
-  eligiblePlayers: string[];
-};
+export interface ShowdownResult {
+  readonly winners: readonly WinnerInfo[];
+  readonly finalState: GameState;
+}
 ```
 
-#### 主要関数
+#### 主要関数 (すべて実装済み)
 
 ```typescript
-// ラウンド開始
-function startRound(params: {
-  players: PlayerState[];
-  dealerIndex: number;
-  smallBlind: number;
-  bigBlind: number;
-}): GameEngineResult;
+// ラウンド開始 (初期化)
+function initializeRound(
+  players: readonly Player[],
+  dealerIndex: number,
+  smallBlind: number,
+  bigBlind: number,
+  rngState: RNGState
+): Either<GameError, GameState>;
 
-// アクション実行
-function executeAction(
-  state: GameState,
-  playerId: string,
-  action: PlayerAction
-): GameEngineResult;
+// アクション実行 (純粋関数、副作用なし)
+function processAction(
+  action: PlayerAction,
+  state: GameState
+): Either<GameError, GameState>;
 
 // ベッティング完了判定
 function isBettingComplete(state: GameState): boolean;
 
-// 次のストリートへ進行
-function advanceStreet(state: GameState): GameEngineResult;
+// ステージ進行 (Acknowledgment付き)
+function advanceStageWithAck(state: GameState): Either<GameError, GameState>;
+
+// ステージ進行 (通常版)
+function advanceStage(state: GameState): Either<GameError, GameState>;
 
 // ショーダウン実行
-function performShowdown(state: GameState): GameEngineResult;
+function performShowdown(state: GameState): Either<GameError, ShowdownResult>;
 
 // 有効なアクション取得
-function getValidActions(state: GameState, playerId: string): string[];
+function getValidActions(
+  playerId: PlayerId,
+  state: GameState
+): readonly ActionType[];
+
+// ポット計算
+function calculatePots(state: GameState): readonly Pot[];
+
+// 役評価
+function evaluateHand(
+  holeCards: readonly [Card, Card],
+  communityCards: readonly Card[]
+): Either<GameError, HandEvaluation>;
+
+// 役比較
+function compareHands(hand1: HandEvaluation, hand2: HandEvaluation): number;
+
+// RNG関連
+function createRNGState(seed: number): RNGState;
+function createRandomRNGState(): RNGState; // 非純粋（Date.now()使用）
+function shuffleDeck(
+  deck: readonly Card[],
+  rngState: RNGState
+): { shuffledDeck: readonly Card[]; nextRngState: RNGState };
 ```
 
-### 2.4 game_engineの実装構成
+詳細な使用方法は [server-v2/src/engine/README.md](../server-v2/src/engine/README.md) を参照してください。
+
+### 2.4 game_engineの実装構成 (実装済み)
 
 ```
-server/src/game_engine/
-├── index.ts              # 主要関数のエクスポート
-├── state.ts              # GameState型定義
-├── actions.ts            # executeAction実装
-├── betting.ts            # ベッティングロジック
-├── street.ts             # ストリート進行
-├── showdown.ts           # ショーダウン処理
-├── hand-evaluator.ts     # 役判定(pokersolver wrapper)
-├── pot-calculator.ts     # ポット計算
-├── deck.ts               # デッキ管理
-└── utils.ts              # ユーティリティ関数
+server/src/engine/                  # ← "game_engine" ではなく "engine"
+├── index.ts                        # 主要関数のエクスポート
+├── types.ts                        # GameState, Player, GameError等の型定義
+├── constants.ts                    # 定数定義
+├── acknowledgment.ts               # Acknowledgment システム (NEW)
+├── actions.ts                      # processAction実装 (36テスト)
+├── deck.ts                         # デッキ管理・シャッフル (23テスト)
+├── game-init.ts                    # initializeRound実装 (15テスト)
+├── hand-evaluator.ts               # 役判定 (pokersolver wrapper) (22テスト)
+├── pot.ts                          # ポット・サイドポット計算 (9テスト)
+├── showdown.ts                     # ショーダウン処理 (10テスト)
+├── stage.ts                        # ステージ進行 (27テスト)
+├── utils.ts                        # ユーティリティ関数 (31テスト)
+└── README.md                       # エンジンの詳細ドキュメント
+
+合計: 190テスト, 96%カバレッジ
 ```
+
+**主な特徴**:
+- ✅ **fp-ts/Either**: 全関数が `Either<GameError, Result>` を返す
+- ✅ **fp-ts/Option**: `Option<T>` でnull安全性を保証
+- ✅ **完全な不変性**: すべてのプロパティが `readonly`
+- ✅ **Acknowledgment**: 全クライアント同期システム組み込み
+- ✅ **決定的RNG**: ゲームの完全な再現性
 
 ---
 
 ## 3. Server側設計
 
-### 3.1 ディレクトリ構成
+> **実装済み**: server-v2/ として完全実装済み (273テスト全通過)
 
-#### Server (server/)
+### 3.1 アーキテクチャ概要
+
+**通信方式**:
+- **REST API** (OpenAPI 3.0準拠): アクション実行、状態取得
+- **WebSocket** (Socket.io): リアルタイム通知のみ (room:updated イベント)
+
+**レイヤー構成**:
+```
+HTTP Request → Express Router → GameService → GameManager → Engine
+                                      ↓
+                                  Notifier → WebSocket broadcast
+```
+
+### 3.2 ディレクトリ構成 (実装済み)
 
 ```
-server/
+server/                             # ← server-v2 を server にリネーム予定
 ├── src/
-│   ├── game_engine/           # ゲームロジック(stateless)
-│   │   ├── index.ts           # 主要関数エクスポート
-│   │   ├── state.ts           # GameState型定義
-│   │   ├── actions.ts         # executeAction実装
-│   │   ├── betting.ts         # ベッティングロジック
-│   │   ├── street.ts          # ストリート進行
-│   │   ├── showdown.ts        # ショーダウン処理
-│   │   ├── hand-evaluator.ts  # 役判定 (pokersolver wrapper)
-│   │   ├── pot-calculator.ts  # ポット・サイドポット計算
-│   │   ├── deck.ts            # デッキ管理 (Fisher-Yates)
-│   │   └── utils.ts           # ユーティリティ関数
+│   ├── engine/                     # 純粋関数型ゲームエンジン (190テスト)
+│   │   ├── index.ts
+│   │   ├── types.ts
+│   │   ├── constants.ts
+│   │   ├── acknowledgment.ts       # ✨ Acknowledgment システム
+│   │   ├── actions.ts              # プレイヤーアクション処理
+│   │   ├── deck.ts                 # デッキ・RNG管理
+│   │   ├── game-init.ts            # ラウンド初期化
+│   │   ├── hand-evaluator.ts       # 役判定
+│   │   ├── pot.ts                  # ポット計算
+│   │   ├── showdown.ts             # ショーダウン
+│   │   ├── stage.ts                # ステージ遷移
+│   │   ├── utils.ts                # ユーティリティ
+│   │   └── README.md
 │   │
-│   ├── room/                  # Room管理(stateful)
-│   │   ├── RoomManager.ts     # 複数ルーム管理
-│   │   └── Room.ts            # 単一ルーム状態管理
+│   ├── api/                        # REST API層
+│   │   ├── routes/
+│   │   │   ├── rooms.ts            # ルーム関連エンドポイント
+│   │   │   └── health.ts           # ヘルスチェック
+│   │   └── middleware/
+│   │       ├── errorHandler.ts     # エラーハンドリング
+│   │       └── validator.ts        # リクエストバリデーション
 │   │
-│   ├── socket/                # WebSocket通信層
-│   │   └── socketHandler.ts   # Socket.ioイベントハンドラ
+│   ├── websocket/                  # WebSocket通知層
+│   │   ├── Notifier.ts             # room:updated イベント送信
+│   │   └── setupWebSocket.ts       # Socket.io設定
 │   │
-│   ├── services/              # サービス層
-│   │   ├── SessionManager.ts  # セッション管理 (120秒グレースピリオド)
-│   │   ├── TurnTimerManager.ts # ターンタイムアウト (60秒)
-│   │   └── LoggerService.ts   # winston統合ロギング
+│   ├── services/                   # ビジネスロジック層
+│   │   └── GameService.ts          # ゲーム操作サービス (35テスト)
 │   │
-│   ├── types/                 # 型定義
-│   │   ├── socket.ts          # Socket.io関連型
-│   │   └── errors.ts          # エラー型 (GameError, ValidationError, TurnError)
+│   ├── managers/                   # 状態管理層
+│   │   └── GameManager.ts          # ルーム・状態管理 (17テスト)
 │   │
-│   ├── utils/                 # ユーティリティ
-│   │   ├── constants.ts       # 定数定義 (MAX_PLAYERS, DEFAULT_CHIPS等)
-│   │   └── validation.ts      # 入力バリデーション (XSS対策)
+│   ├── types/                      # 共通型定義
+│   │   ├── api.ts                  # API リクエスト/レスポンス型
+│   │   └── room.ts                 # Room関連型
 │   │
-│   ├── app.ts                 # Express設定
-│   └── server.ts              # サーバー起動エントリー
+│   ├── utils/                      # ユーティリティ
+│   │   └── logger.ts               # winston ロガー
+│   │
+│   ├── app.ts                      # Express + Socket.io アプリケーション
+│   └── server.ts                   # サーバー起動エントリー
 │
-├── test/
-│   ├── unit/                  # 単体テスト (カバレッジ 80%以上)
-│   │   ├── game_engine/
-│   │   │   ├── actions.test.ts
-│   │   │   ├── betting.test.ts
-│   │   │   ├── street.test.ts
-│   │   │   ├── showdown.test.ts
-│   │   │   ├── hand-evaluator.test.ts
-│   │   │   ├── pot-calculator.test.ts
-│   │   │   └── deck.test.ts
-│   │   ├── room/
-│   │   │   ├── RoomManager.test.ts
-│   │   │   └── Room.test.ts
-│   │   └── services/
-│   │       ├── SessionManager.test.ts
-│   │       ├── TurnTimerManager.test.ts
-│   │       └── LoggerService.test.ts
-│   │
-│   └── integration/           # 統合テスト (カバレッジ 70%以上)
-│       ├── game-flow.test.ts  # 完全ゲームフロー
-│       ├── reconnect.test.ts  # 再接続シナリオ
-│       └── socketHandler.test.ts # Socket.ioイベント
+├── tests/                          # テストスイート (273テスト)
+│   ├── engine/                     # エンジン層テスト (190)
+│   ├── managers/                   # マネージャーテスト (17)
+│   ├── services/                   # サービステスト (10)
+│   ├── websocket/                  # WebSocket層テスト (8)
+│   └── integration/                # 統合テスト (48)
+│       ├── api-game-flow.test.ts
+│       ├── api-game-flow-heads-up.test.ts
+│       └── api-websocket-integration.test.ts
 │
+├── docs/                           # ドキュメント
+│   ├── README.md                   # プロジェクト概要 (v2.2.0)
+│   ├── ACKNOWLEDGMENT_SYNC_DESIGN.md  # Acknowledgment設計書
+│   ├── GAME_FLOW_SEQUENCE.md       # ゲームフローシーケンス
+│   └── TEST_SCENARIOS.md           # テストシナリオ一覧
+│
+├── openapi.yaml                    # OpenAPI 3.0 仕様書
 ├── package.json
 ├── tsconfig.json
-├── tsconfig.build.json
 ├── jest.config.js
-├── nodemon.json
-├── .eslintrc.json
-├── .prettierrc.json
-├── .env.example
-└── .gitignore
+└── .env.example
 ```
+
+**テスト状況**: 273/273 passing (100%)
 
 #### Client (client/)
 
@@ -949,51 +1091,95 @@ export function Room() {
 
 ## 5. 通信プロトコル
 
-### 5.1 クライアント → サーバー
+> **実装済み**: OpenAPI 3.0準拠の REST API + Socket.io WebSocket
 
-| イベント名 | ペイロード | 説明 |
-|----------|----------|------|
-| `createRoom` | `{ hostName: string, smallBlind: number, bigBlind: number }` | ルーム作成 |
-| `joinRoom` | `{ roomId: string, playerName: string }` | ルーム参加 |
-| `startGame` | `{ roomId: string }` | ゲーム開始 |
-| `action` | `{ roomId: string, playerId: string, action: PlayerAction }` | プレイヤーアクション |
-| `reconnectRequest` | `{ roomId: string, playerId: string }` | 再接続要求 |
+### 5.1 REST API エンドポイント (実装済み)
 
-### 5.2 サーバー → クライアント
+**仕様書**: [server-v2/openapi.yaml](../server-v2/openapi.yaml)
 
-| イベント名 | ペイロード | 説明 | 送信方法 |
-|----------|----------|------|---------|
-| `roomCreated` | `{ roomId: string, playerId: string }` | ルーム作成完了 | 個別 |
-| `joinedRoom` | `{ roomId: string, playerId: string, seat: number }` | ルーム参加完了 | 個別 |
-| `playerJoined` | `{ playerId: string, playerName: string, seat: number }` | 他プレイヤー参加通知 | ルーム全体 |
-| `actionResponse` | `{ success: boolean, error?: string }` | アクションレスポンス | 個別 |
-| `stateUpdated` | `PublicGameState` | ゲーム状態更新 | ルーム全体 |
-| `dealHand` | `{ playerId: string, hand: [string, string] }` | 手札配布 | **個別** |
-| `timerUpdate` | `{ playerId: string, remaining: number, warning: boolean }` | タイマー更新 | ルーム全体 |
-| `error` | `{ message: string, code?: string }` | エラー通知 | 個別 |
+#### ルーム操作
 
-### 5.3 stateUpdated形式
+| Method | Endpoint | 説明 | Request Body | Response |
+|--------|----------|------|--------------|----------|
+| `POST` | `/api/v1/rooms` | ルーム作成 | `{ hostName, smallBlind?, bigBlind? }` | `{ roomId, playerId }` |
+| `GET` | `/api/v1/rooms/:roomId` | ルーム情報取得 | - | `{ id, status, players, ... }` |
+| `POST` | `/api/v1/rooms/:roomId/join` | ルーム参加 | `{ playerName }` | `{ playerId, seat }` |
+| `POST` | `/api/v1/rooms/:roomId/start` | ゲーム開始 | - | `201 Created` |
+| `GET` | `/api/v1/rooms/:roomId/state` | ゲーム状態取得 | `?playerId=xxx` | `GameState` (プレイヤー視点) |
+| `POST` | `/api/v1/rooms/:roomId/actions` | アクション実行 | `{ playerId, type, amount? }` | `201 Created` |
 
-```typescript
-type PublicGameState = {
-  stage: string;
-  players: {
-    id: string;
-    name: string;
-    chips: number;
-    seat: number;
-  }[];
-  dealerIndex: number;
-  currentBettorId: string | null;
-  pot: number;
-  communityCards: string[];
-  playerBets: Record<string, number>;
-  folded: string[];
-  allIn: string[];
-};
+#### ステータスコード
+
+- `200 OK`: 成功
+- `201 Created`: リソース作成成功
+- `400 Bad Request`: 不正なリクエスト
+- `404 Not Found`: リソースが見つからない
+- `500 Internal Server Error`: サーバーエラー
+
+### 5.2 WebSocket 通知 (実装済み)
+
+**用途**: リアルタイム状態更新通知のみ (アクション実行はREST API)
+
+#### Socket.io イベント
+
+| イベント名 | ペイロード | 説明 | タイミング |
+|----------|----------|------|-----------|
+| `room:updated` | `{ roomId, updateType, room }` | ルーム状態更新 | 全ての状態変更時 |
+
+#### `updateType` の種類
+
+- `game_started`: ゲーム開始
+- `action`: プレイヤーアクション実行
+- `stage_advanced`: ステージ遷移
+- `showdown`: ショーダウン
+- `player_joined`: プレイヤー参加
+- `player_left`: プレイヤー退出
+
+### 5.3 Acknowledgment プロトコル (重要)
+
+**全クライアント同期システム**
+
+```
+1. Client A → REST API POST /actions (call)
+2. Server → WebSocket broadcast 'room:updated' (waitingForAck: true)
+3. All Clients → REST API POST /actions (acknowledge)
+4. Server → WebSocket broadcast 'room:updated' (waitingForAck: false)
 ```
 
-**注意**: 手札情報は含めない(セキュリティ)
+**GameState 内の Acknowledgment フィールド**:
+
+```typescript
+{
+  waitingForAck: boolean;
+  ackState: Option<{
+    type: 'action' | 'stage_transition';
+    expectedAcks: Set<PlayerId>;
+    receivedAcks: Set<PlayerId>;
+  }>;
+}
+```
+
+詳細は [server-v2/ACKNOWLEDGMENT_SYNC_DESIGN.md](../server-v2/ACKNOWLEDGMENT_SYNC_DESIGN.md) を参照。
+
+### 5.4 プレイヤー視点のGameState
+
+**セキュリティ**: `GET /api/v1/rooms/:roomId/state?playerId=xxx` では、該当プレイヤーの手札のみ含まれます。
+
+```typescript
+interface PlayerGameState {
+  stage: Stage;
+  players: Player[]; // チップ情報のみ
+  dealerIndex: number;
+  currentBettorIndex: number;
+  communityCards: Card[];
+  currentBet: number;
+  minRaiseAmount: number;
+  totalPot: number;
+  myHand: Option<[Card, Card]>; // 自分の手札のみ
+  waitingForAck: boolean;
+  // 他プレイヤーの手札は含まない
+}
+```
 
 ---
 
@@ -1068,15 +1254,44 @@ type PlayerSession = {
 
 ## 7. テスト戦略
 
+> **実装済み**: server-v2 で 273/273 テスト全通過
+
 ### 7.1 テストレイヤー構成
 
-| レイヤー | 対象 | ツール | カバレッジ目標 |
-|---------|------|-------|--------------|
-| **Server Unit** | game_engine, Room, services | Jest | 80% |
-| **Server Integration** | socketHandler + Room + game_engine | Jest + socket.io-client | 70% |
-| **Client Unit** | コンポーネント, フック | Vitest + React Testing Library | 70% |
-| **Client Integration** | Socket通信 + State管理 | Vitest + WebSocketモック | 60% |
-| **E2E** | 完全なゲームフロー | Playwright | 主要シナリオ網羅 |
+| レイヤー | 対象 | ツール | カバレッジ目標 | 実績 |
+|---------|------|-------|--------------|------|
+| **Engine Unit** | 純粋関数型エンジン | Jest | 80% | ✅ 190テスト, 96% |
+| **Service Unit** | GameService, GameManager | Jest | 80% | ✅ 27テスト, 100% |
+| **WebSocket Unit** | Notifier | Jest | 80% | ✅ 8テスト, 100% |
+| **Server Integration** | REST API + WebSocket + フルゲームフロー | Jest + supertest + socket.io-client | 70% | ✅ 48テスト, 100% |
+| **Client Unit** | コンポーネント, フック | Vitest + React Testing Library | 70% | ⏳ 未実装 |
+| **Client Integration** | API通信 + WebSocket | Vitest + モック | 60% | ⏳ 未実装 |
+| **E2E** | 完全なゲームフロー | Playwright | 主要シナリオ網羅 | ⏳ 未実装 |
+
+### 7.2 テストカバレッジ詳細 (server-v2)
+
+#### エンジン層ユニットテスト (190テスト)
+
+| モジュール | テスト数 | カバレッジ | 主な検証内容 |
+|----------|--------|----------|-------------|
+| actions.ts | 36 | 94.02% | 全アクションタイプ、バリデーション、ターン管理 |
+| utils.ts | 31 | 100% | プレイヤー検索、ベット計算、バリデーション |
+| stage.ts | 27 | 93.75% | ステージ遷移、カード配布、ベットリセット |
+| deck.ts | 23 | 100% | デッキ生成、シャッフル、RNG |
+| hand-evaluator.ts | 22 | 94.59% | 全役判定、役比較、タイブレーク |
+| game-init.ts | 15 | 96% | ラウンド初期化、ブラインド配置 |
+| showdown.ts | 10 | 94.33% | 勝者決定、ポット配分、チョップ |
+| pot.ts | 9 | 97.5% | メインポット、サイドポット計算 |
+| acknowledgment.ts | 9 | 100% | Ack設定、受信、完了判定 |
+| game-flow-integration.ts | 8 | - | 完全ゲームフロー統合テスト |
+
+#### 統合テスト (48テスト)
+
+| テストファイル | テスト数 | 検証内容 |
+|--------------|--------|---------|
+| api-game-flow-heads-up.test.ts | 33 | ヘッズアップ全シナリオ |
+| api-game-flow.test.ts | 13 | 3人プレイヤー基本フロー |
+| api-websocket-integration.test.ts | 2 | WebSocket通知統合 |
 
 ### 7.2 Server Unit Test
 
