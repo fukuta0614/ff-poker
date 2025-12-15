@@ -1,9 +1,29 @@
+/**
+ * FF Poker App
+ * メインアプリケーションコンポーネント
+ */
+
+import { GameProvider, useGame } from './contexts/GameContext';
+import { Lobby } from './components/Lobby';
+import { Room } from './components/Room';
+
+function AppContent() {
+  const { roomId, room } = useGame();
+
+  // Show Lobby if not in a room yet
+  if (!roomId || !room) {
+    return <Lobby />;
+  }
+
+  // Show Room component when joined
+  return <Room />;
+}
+
 function App() {
   return (
-    <div>
-      <h1>FF Poker v2.0</h1>
-      <p>Coming soon...</p>
-    </div>
+    <GameProvider>
+      <AppContent />
+    </GameProvider>
   );
 }
 
