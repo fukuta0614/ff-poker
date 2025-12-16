@@ -25,7 +25,8 @@ import type {
 } from './websocket/events';
 
 const PORT = process.env.PORT || 3001;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+// 末尾のスラッシュを削除（CORS設定のミスマッチを防ぐ）
+const CORS_ORIGIN = (process.env.CORS_ORIGIN || 'http://localhost:5173').replace(/\/$/, '');
 
 // HTTPサーバーの作成（Socket.ioとExpressで共有）
 const app = express();
