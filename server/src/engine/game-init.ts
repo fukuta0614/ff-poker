@@ -2,7 +2,6 @@
  * ゲーム初期化関数（純粋関数）
  */
 
-import { pipe } from 'fp-ts/function';
 import * as E from 'fp-ts/Either';
 import * as O from 'fp-ts/Option';
 import type {

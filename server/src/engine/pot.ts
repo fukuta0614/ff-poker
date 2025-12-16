@@ -43,7 +43,7 @@ export const calculatePots = (state: GameState): readonly Pot[] => {
   // 各レベルでポットを作成
   let previousBet = 0;
 
-  for (const { bet: currentBet, isFolded } of sortedBets) {
+  for (const { bet: currentBet } of sortedBets) {
     if (currentBet === 0) {
       continue; // ベットしていないプレイヤーはスキップ
     }
