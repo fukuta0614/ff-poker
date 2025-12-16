@@ -63,11 +63,14 @@ export const setupSocketHandlers = (
             io.to(roomId).emit('gameEnded', event.payload);
             break;
           case 'roundStarted':
+            console.log(`[SocketHandler] roundStarted event received for room ${roomId}`);
             io.to(roomId).emit('gameStarted', event.payload);
-            
+            console.log(`[SocketHandler] Emitted gameStarted to room ${roomId}`, event.payload);
+
             const room = gameManager.getRoom(roomId);
             const round = gameManager.getActiveRound(roomId);
             if (room && round) {
+              console.log(`[SocketHandler] Dealing hands to ${room.players.length} players`);
               for (const player of room.players) {
                 const hand = round.getPlayerHand(player.id);
                 if (hand) {
@@ -79,6 +82,7 @@ export const setupSocketHandlers = (
                       playerId: player.id,
                       hand: hand,
                     });
+                    console.log(`[SocketHandler] Dealt hand to player ${player.id}`);
                   }
                 }
               }

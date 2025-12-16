@@ -85,21 +85,28 @@ export class Room {
   }
 
   public endRound(): void {
+    console.log(`[Room ${this.id}] Ending round...`);
     this.activeRound = null;
-    
+
     // Remove players with 0 chips
     const currentDealer = this.players[this.dealerIndex];
+    const playersBefore = this.players.length;
     this.players = this.players.filter(p => p.chips > 0);
+    console.log(`[Room ${this.id}] Players remaining: ${this.players.length} (was ${playersBefore})`);
 
     if (this.players.length < 2) {
+      console.log(`[Room ${this.id}] Not enough players, marking as finished`);
       this.state = 'finished';
       return;
     }
 
     this.rotateDealer(currentDealer);
-    
+    console.log(`[Room ${this.id}] Dealer rotated to index ${this.dealerIndex}`);
+
     // Start next round immediately
+    console.log(`[Room ${this.id}] Starting new round...`);
     this.startRound();
+    console.log(`[Room ${this.id}] New round started successfully`);
   }
 
   private rotateDealer(previousDealer: Player): void {

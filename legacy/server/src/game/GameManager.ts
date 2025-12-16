@@ -195,15 +195,18 @@ export class GameManager {
   }
 
   private handleNextRound(room: Room, events: GameEvent[]): void {
+    console.log(`[GameManager] Starting next round for room ${room.id}`);
     room.endRound();
 
     if (room.state === 'finished') {
+      console.log(`[GameManager] Game ended - not enough players`);
       events.push({ type: 'gameEnded', payload: { reason: 'Not enough players' } });
       return;
     }
 
     const newRound = room.getRound();
     if (newRound) {
+      console.log(`[GameManager] New round started - dealer index: ${room.dealerIndex}`);
       events.push({
         type: 'roundStarted',
         payload: {
@@ -221,6 +224,8 @@ export class GameManager {
       });
 
       this.addTurnChangeEvent(newRound, events);
+    } else {
+      console.log(`[GameManager] Warning: No new round created after endRound()`);
     }
   }
 
