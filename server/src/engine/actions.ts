@@ -12,7 +12,6 @@ import type {
   Player,
   PlayerState,
   PlayerAction,
-  ActionType,
 } from './types';
 import {
   getPlayer,
@@ -21,9 +20,7 @@ import {
   calculateCallAmount,
   getValidActions,
   getActivePlayers,
-  isBettingComplete,
 } from './utils';
-import { advanceStageWithAck } from './stage';
 
 /**
  * フォールド処理

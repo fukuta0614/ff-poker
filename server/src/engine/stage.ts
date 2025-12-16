@@ -4,7 +4,7 @@
 
 import * as E from 'fp-ts/Either';
 import * as O from 'fp-ts/Option';
-import type { GameState, GameError, Card } from './types';
+import type { GameState, GameError } from './types';
 import { dealCards } from './deck';
 import { resetForNewStreet } from './game-init';
 import { getActivePlayers } from './utils';
