@@ -173,7 +173,6 @@ export class GameService {
       E.map((showdownResult: ShowdownResult) => {
         const finalState = showdownResult.finalState;
         this.gameManager.setGameState(roomId, finalState);
-        this.gameManager.setRoomState(roomId, 'ended');
 
         // プレイヤーのチップを更新
         this.updatePlayerChips(roomId, finalState);
@@ -183,9 +182,45 @@ export class GameService {
           this.notifier.notifyRoomUpdated(roomId, 'showdown');
         }
 
+        // 次のラウンドを開始
+        this.startNextRound(roomId);
+
         return finalState;
       })
     );
+  }
+
+  /**
+   * 次のラウンドを開始
+   */
+  private startNextRound(roomId: string): void {
+    const room = this.gameManager.getRoom(roomId);
+    if (!room) return;
+
+    // チップが0のプレイヤーを除外
+    const activePlayers = room.players.filter((p) => p.chips > 0);
+
+    // 2人未満の場合はゲーム終了
+    if (activePlayers.length < 2) {
+      this.gameManager.setRoomState(roomId, 'ended');
+      return;
+    }
+
+    // プレイヤーリストを更新
+    room.players = activePlayers;
+
+    // ディーラーボタンを進める
+    this.gameManager.advanceDealerIndex(roomId);
+
+    // 3秒後に次のラウンドを開始
+    setTimeout(() => {
+      const startResult = this.startGame(roomId);
+
+      if (E.isLeft(startResult)) {
+        console.error('[GameService] Failed to start next round:', startResult.left);
+        this.gameManager.setRoomState(roomId, 'ended');
+      }
+    }, 3000);
   }
 
   /**
