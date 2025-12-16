@@ -45,7 +45,8 @@ export class ApiClient {
   private baseUrl: string;
 
   constructor(baseUrl: string = API_BASE_URL) {
-    this.baseUrl = baseUrl;
+    // トレーリングスラッシュを削除してダブルスラッシュを防ぐ
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
   }
 
   /**

@@ -51,7 +51,10 @@ export class SocketClient {
       return this.socket;
     }
 
-    this.socket = io(SOCKET_URL, {
+    // トレーリングスラッシュを削除してダブルスラッシュを防ぐ
+    const socketUrl = SOCKET_URL.replace(/\/+$/, '');
+
+    this.socket = io(socketUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
