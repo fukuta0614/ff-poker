@@ -97,33 +97,6 @@ ff-poker/
 
 詳細は [docs/requirements.md](docs/requirements.md#14-技術スタック) を参照
 
-## デプロイ
-
-### バックエンド (Render)
-
-1. [Render](https://render.com/)でWeb Serviceを作成
-2. リポジトリを接続し、以下を設定:
-   - **Root Directory**: `server`
-   - **Build Command**: `npm install && npm run build`
-   - **Start Command**: `npm start`
-3. 環境変数を設定:
-   - `PORT`: 3001
-   - `CORS_ORIGIN`: フロントエンドのURL（例: `https://your-app.netlify.app`）
-
-### フロントエンド (Netlify)
-
-1. [Netlify](https://www.netlify.com/)でサイトを作成
-2. リポジトリを接続し、以下を設定:
-   - **Base Directory**: `client`
-   - **Build Command**: `npm run build`
-   - **Publish Directory**: `client/dist`
-3. 環境変数を設定（Settings > Environment Variables）:
-   - `VITE_SERVER_URL`: バックエンドのURL（例: `https://your-api.onrender.com`）
-   - `VITE_API_URL`: バックエンドのURL（VITE_SERVER_URLと同じ）
-   - `VITE_SOCKET_URL`: バックエンドのURL（VITE_SERVER_URLと同じ）
-
-**注意**: バックエンドのデプロイが完了してURLが確定してから、フロントエンドの環境変数を設定してください。
-
 ## ライセンス
 
 MIT
