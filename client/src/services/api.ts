@@ -5,8 +5,7 @@
 
 import type { components } from '../types/api';
 
-// Remove trailing slash to avoid double slashes in URLs
-const API_BASE_URL = (import.meta.env.VITE_SERVER_URL || 'http://localhost:3001').replace(/\/$/, '');
+const API_BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 // ============================================
 // Type Aliases
