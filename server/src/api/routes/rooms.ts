@@ -61,6 +61,28 @@ export function createRoomsRouter(
   });
 
   /**
+   * GET /api/v1/rooms
+   * ルーム一覧取得
+   */
+  router.get('/', (_req: Request, res: Response, next: NextFunction) => {
+    try {
+      const rooms = gameManager.getAllRooms();
+
+      res.json({
+        rooms: rooms.map((room) => ({
+          id: room.id,
+          playerCount: room.players.length,
+          state: room.state,
+          smallBlind: room.smallBlind,
+          bigBlind: room.bigBlind,
+        })),
+      });
+    } catch (error) {
+      return next(error);
+    }
+  });
+
+  /**
    * GET /api/v1/rooms/:roomId
    * ルーム情報取得
    */

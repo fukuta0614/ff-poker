@@ -92,6 +92,24 @@ export class ApiClient {
   }
 
   /**
+   * GET /api/v1/rooms
+   * ルーム一覧取得
+   */
+  async listRooms(): Promise<{
+    rooms: Array<{
+      id: string;
+      playerCount: number;
+      state: string;
+      smallBlind: number;
+      bigBlind: number;
+    }>;
+  }> {
+    return this.request('/rooms', {
+      method: 'GET',
+    });
+  }
+
+  /**
    * GET /api/v1/rooms/:roomId
    * ルーム情報取得
    */

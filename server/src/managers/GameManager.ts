@@ -10,9 +10,11 @@
 import { v4 as uuidv4 } from 'uuid';
 import { GameState, Player, PlayerId } from '@engine/types';
 import { Room, RoomState } from '../types/internal';
+import { generateShortRoomId } from '../utils/room-id';
 
 const DEFAULT_STARTING_CHIPS = 1000;
 const MAX_PLAYERS = 9;
+const MAX_ROOM_ID_ATTEMPTS = 10;
 
 export class GameManagerV2 {
   private rooms: Map<string, Room>;
@@ -27,7 +29,17 @@ export class GameManagerV2 {
    * ルーム作成
    */
   createRoom(hostName: string, smallBlind: number, bigBlind: number): Room {
-    const roomId = `room-${uuidv4()}`;
+    // 短いRoom IDを生成（重複チェック付き）
+    let roomId: string;
+    let attempts = 0;
+    do {
+      roomId = generateShortRoomId();
+      attempts++;
+      if (attempts > MAX_ROOM_ID_ATTEMPTS) {
+        throw new Error('Failed to generate unique room ID');
+      }
+    } while (this.rooms.has(roomId));
+
     const hostId = `player-${uuidv4()}`;
 
     const hostPlayer: Player = {

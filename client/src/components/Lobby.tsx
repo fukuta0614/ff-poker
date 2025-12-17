@@ -3,8 +3,9 @@
  * ルーム作成・参加UI
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGame } from '../contexts/GameContext';
+import { apiClient } from '../services/api';
 
 export function Lobby() {
   const { createRoom, joinRoom, isLoading, error } = useGame();
@@ -17,6 +18,16 @@ export function Lobby() {
   // Room joining state
   const [roomId, setRoomId] = useState('');
   const [playerName, setPlayerName] = useState('');
+
+  // Room list state
+  const [rooms, setRooms] = useState<Array<{
+    id: string;
+    playerCount: number;
+    state: string;
+    smallBlind: number;
+    bigBlind: number;
+  }>>([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
 
   const handleCreateRoom = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +53,28 @@ export function Lobby() {
     }
   };
 
+  const loadRooms = async () => {
+    setLoadingRooms(true);
+    try {
+      const data = await apiClient.listRooms();
+      setRooms(data.rooms);
+    } catch (err) {
+      console.error('Failed to load rooms:', err);
+    } finally {
+      setLoadingRooms(false);
+    }
+  };
+
+  const handleJoinFromList = (selectedRoomId: string) => {
+    setRoomId(selectedRoomId);
+  };
+
+  useEffect(() => {
+    loadRooms();
+    const interval = setInterval(loadRooms, 5000); // 5秒ごとに更新
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
       <h1>FF Poker Lobby2</h1>
@@ -58,6 +91,51 @@ export function Lobby() {
           }}
         >
           Error: {error}
+        </div>
+      )}
+
+      {/* Room List Section */}
+      {rooms.length > 0 && (
+        <div style={{ marginTop: '30px', marginBottom: '30px' }}>
+          <h2>Available Rooms</h2>
+          {loadingRooms && <p>Loading rooms...</p>}
+          <div style={{ display: 'grid', gap: '10px' }}>
+            {rooms.map((room) => (
+              <div
+                key={room.id}
+                style={{
+                  padding: '15px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  backgroundColor: room.state === 'waiting' ? '#f9f9f9' : '#eee',
+                }}
+              >
+                <div>
+                  <strong style={{ fontSize: '18px' }}>Room {room.id}</strong>
+                  <div style={{ fontSize: '14px', color: '#666', marginTop: '5px' }}>
+                    Players: {room.playerCount} | Blinds: {room.smallBlind}/{room.bigBlind} | Status: {room.state}
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleJoinFromList(room.id)}
+                  disabled={room.state !== 'waiting'}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: room.state === 'waiting' ? '#2196F3' : '#ccc',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: room.state === 'waiting' ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  {room.state === 'waiting' ? 'Select' : 'In Progress'}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
