@@ -144,7 +144,7 @@ export class GameService {
 
     return pipe(
       result,
-      E.map((newState) => {
+      E.chain((newState) => {
         this.gameManager.setGameState(roomId, newState);
 
         // WebSocket通知: ステージ進行
@@ -152,7 +152,12 @@ export class GameService {
           this.notifier.notifyRoomUpdated(roomId, 'stage_advanced');
         }
 
-        return newState;
+        // ステージ進行後にショーダウンに到達した場合
+        if (newState.stage === 'showdown' || newState.stage === 'ended') {
+          return this.handleShowdown(roomId, newState);
+        }
+
+        return E.right(newState);
       })
     );
   }

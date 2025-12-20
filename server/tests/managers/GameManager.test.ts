@@ -16,7 +16,8 @@ describe('GameManagerV2', () => {
     it('should create a room with unique ID', () => {
       const room = gameManager.createRoom('Alice', 10, 20);
 
-      expect(room.id).toMatch(/^room-/);
+      // 短いRoom ID（6文字の英数字）
+      expect(room.id).toMatch(/^[A-Z2-9]{6}$/);
       expect(room.hostId).toMatch(/^player-/);
       expect(room.players).toHaveLength(1);
       expect(room.players[0].name).toBe('Alice');

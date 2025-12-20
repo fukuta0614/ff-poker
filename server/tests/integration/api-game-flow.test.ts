@@ -27,7 +27,8 @@ describe('API Integration - Full Game Flow', () => {
 
       expect(response.body).toHaveProperty('roomId');
       expect(response.body).toHaveProperty('hostId');
-      expect(response.body.roomId).toMatch(/^room-/);
+      // 短いRoom ID（6文字の英数字）
+      expect(response.body.roomId).toMatch(/^[A-Z2-9]{6}$/);
       expect(response.body.hostId).toMatch(/^player-/);
 
       roomId = response.body.roomId;
