@@ -25,6 +25,8 @@ import {
   createRandomRNGState,
   isBettingComplete,
   getCurrentBettor,
+  hasOnlyOneActivePlayer,
+  getActivePlayers,
 } from '@engine/index';
 import { GameManagerV2 } from '../managers/GameManager';
 import type { GameNotifier } from '../websocket/notifier';
@@ -117,6 +119,12 @@ export class GameService {
         }
 
         // ゲーム進行判定
+        // 1. 全員フォールド（1人のみ残り）チェック - 即座に勝者決定
+        if (hasOnlyOneActivePlayer(newState)) {
+          return this.handleWinByFold(roomId, newState);
+        }
+
+        // 2. ショーダウン/終了状態チェック
         if (newState.stage === 'showdown' || newState.stage === 'ended') {
           // ショーダウン処理
           return this.handleShowdown(roomId, newState);
@@ -129,6 +137,56 @@ export class GameService {
         }
       })
     );
+  }
+
+  /**
+   * フォールドによる勝利処理
+   *
+   * 1人のプレイヤーのみが残った場合、即座にラウンド終了
+   */
+  private handleWinByFold(
+    roomId: string,
+    state: GameState
+  ): E.Either<GameError, GameState> {
+    const activePlayers = getActivePlayers(state);
+
+    if (activePlayers.length !== 1) {
+      return E.left({
+        type: 'InvalidStage',
+        expected: 'preflop',
+        actual: state.stage,
+      });
+    }
+
+    const winner = activePlayers[0];
+
+    // 勝者にポットを配分
+    const newPlayers = new Map(state.players);
+    newPlayers.set(winner.id, {
+      ...winner,
+      chips: winner.chips + state.totalPot,
+    });
+
+    const finalState: GameState = {
+      ...state,
+      stage: 'ended',
+      players: newPlayers,
+    };
+
+    this.gameManager.setGameState(roomId, finalState);
+
+    // プレイヤーのチップを更新
+    this.updatePlayerChips(roomId, finalState);
+
+    // WebSocket通知: 勝者決定（フォールドによる勝利）
+    if (this.notifier) {
+      this.notifier.notifyRoomUpdated(roomId, 'showdown');
+    }
+
+    // 次のラウンドを開始
+    this.startNextRound(roomId);
+
+    return E.right(finalState);
   }
 
   /**
