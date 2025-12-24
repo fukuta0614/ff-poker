@@ -277,3 +277,93 @@ export const advanceStageWithAck = (
     }),
   });
 };
+
+/**
+ * 全員オールイン時：残りのコミュニティカードを一気に配り、ショーダウンへ
+ *
+ * この関数は、全てのアクティブプレイヤーがオールイン（chips === 0）の場合に使用
+ * 通常のステージ進行をスキップし、直接ショーダウンまで進む
+ */
+export const advanceToShowdownForAllIn = (
+  state: GameState
+): E.Either<GameError, GameState> => {
+  let currentState = state;
+
+  // 現在のステージから残りのカードを配る
+  switch (currentState.stage) {
+    case 'preflop': {
+      // Flop → Turn → River を順次配る
+      const flopResult = dealFlop(currentState);
+      if (E.isLeft(flopResult)) {
+        return flopResult;
+      }
+      currentState = flopResult.right;
+
+      const turnResult = dealTurn(currentState);
+      if (E.isLeft(turnResult)) {
+        return turnResult;
+      }
+      currentState = turnResult.right;
+
+      const riverResult = dealRiver(currentState);
+      if (E.isLeft(riverResult)) {
+        return riverResult;
+      }
+      currentState = riverResult.right;
+      break;
+    }
+
+    case 'flop': {
+      // Turn → River を順次配る
+      const turnResult = dealTurn(currentState);
+      if (E.isLeft(turnResult)) {
+        return turnResult;
+      }
+      currentState = turnResult.right;
+
+      const riverResult = dealRiver(currentState);
+      if (E.isLeft(riverResult)) {
+        return riverResult;
+      }
+      currentState = riverResult.right;
+      break;
+    }
+
+    case 'turn': {
+      // River を配る
+      const riverResult = dealRiver(currentState);
+      if (E.isLeft(riverResult)) {
+        return riverResult;
+      }
+      currentState = riverResult.right;
+      break;
+    }
+
+    case 'river':
+      // すでに River なのでそのまま
+      break;
+
+    case 'showdown':
+    case 'ended':
+      return E.left({
+        type: 'InvalidStage',
+        expected: 'preflop',
+        actual: state.stage,
+      });
+
+    default:
+      return E.left({
+        type: 'InvalidStage',
+        expected: 'preflop',
+        actual: state.stage,
+      });
+  }
+
+  // ショーダウンステージに設定
+  return E.right({
+    ...currentState,
+    stage: 'showdown',
+    waitingForAck: false,
+    ackState: O.none,
+  });
+};

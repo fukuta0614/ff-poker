@@ -80,6 +80,7 @@ export {
   getValidActions,
   isBettingComplete,
   hasOnlyOneActivePlayer,
+  areAllPlayersAllIn,
 } from './utils';
 
 // アクション処理関数
@@ -111,6 +112,7 @@ export {
 export {
   advanceStage,
   advanceStageWithAck,
+  advanceToShowdownForAllIn,
   dealFlop,
   dealTurn,
   dealRiver,

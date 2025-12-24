@@ -301,49 +301,29 @@ test.describe('FF Poker Full Game Flow', () => {
       await callButton.click();
 
       // EXPECTED: Game should automatically show all community cards and proceed to showdown
-      // Wait a bit for acknowledgments and game progression
-      await playerA.waitForTimeout(1000);
+      // One player will lose all chips and game will end
 
-      // Check game state after both all-in
-      console.log('=== After Both All-In ===');
+      // Wait for showdown to complete
+      await playerA.waitForTimeout(3000);
 
-      // Get all visible text on page
-      const bodyText = await playerA.locator('body').textContent();
-      console.log('Page text includes "Waiting":', bodyText?.includes('Waiting') || false);
-      console.log('Page text includes "Your Turn":', bodyText?.includes('Your Turn') || false);
-      console.log('Page text includes "Stage":', bodyText?.includes('Stage') || false);
-
-      // Check if there's any error message
-      const hasError = await playerA.locator('text=/Error/i').isVisible().catch(() => false);
-      console.log('Has error:', hasError);
-
-      if (hasError) {
-        const errorText = await playerA.locator('text=/Error/i').textContent();
-        console.log('Error message:', errorText);
-      }
-
-      // Wait longer for automatic progression
-      await playerA.waitForTimeout(5000);
-
-      // Check if we can see community cards or showdown
-      const communityCardsVisible = await playerA.locator('text=/Community Cards|Flop|Turn|River/i').isVisible()
+      // After all-in showdown, game should be finished (one player has 0 chips)
+      const gameFinished = await playerA.locator('text=Game Finished').isVisible({ timeout: 2000 })
         .catch(() => false);
 
-      console.log('Community cards visible:', communityCardsVisible);
-
-      // Both players should see either showdown or next round starting
-      const showdownOrNextRound = await playerA.locator('text=/Showdown|Your Turn/i').isVisible()
+      const statusEnded = await playerA.locator('text=/Status:.*ended/i').isVisible({ timeout: 2000 })
         .catch(() => false);
 
-      console.log('Showdown or next round:', showdownOrNextRound);
+      console.log('=== After Both All-In Showdown ===');
+      console.log('Game finished:', gameFinished);
+      console.log('Status ended:', statusEnded);
 
-      // Take screenshot for debugging
-      await playerA.screenshot({ path: '/tmp/playerA-after-double-allin.png' });
-
-      if (!showdownOrNextRound) {
-        console.log('⚠️  BUG CONFIRMED: All-in showdown did not proceed automatically');
+      if (gameFinished && statusEnded) {
+        console.log('✅ All-in showdown proceeded correctly, winner determined, game ended');
       } else {
-        console.log('✅ All-in showdown proceeded correctly');
+        const bodyText = await playerA.locator('body').textContent();
+        console.log('Page text:', bodyText?.substring(0, 500));
+        await playerA.screenshot({ path: '/tmp/playerA-after-double-allin.png' });
+        console.log('⚠️  BUG CONFIRMED: All-in showdown did not complete properly');
       }
 
     } finally {

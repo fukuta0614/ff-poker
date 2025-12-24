@@ -592,16 +592,24 @@ describe('API Integration - Heads-Up Game Flow', () => {
       activePlayerIds = await getActivePlayerIds(app, roomId, player1Id);
       await sendAcknowledgments(app, roomId, activePlayerIds);
 
-      // 両者オールインなので、ショーダウンまで自動進行
-      const finalState = callResponse.body.gameState;
+      // 両者オールインなので、ショーダウンまで自動進行し、勝者が決定される
+      // ショーダウン後の最終状態を取得
+      const finalStateResponse = await request(app)
+        .get(`/api/v1/rooms/${roomId}/state`)
+        .query({ playerId: player1Id });
 
-      // 両者のチップが0であることを確認
-      finalState.players.forEach((p: any) => {
-        expect(p.chips).toBe(0);
-      });
+      const finalState = finalStateResponse.body.gameState;
 
-      // ゲームが進行していることを確認
-      expect(['flop', 'turn', 'river', 'showdown', 'ended']).toContain(finalState.stage);
+      // ショーダウンが完了し、勝者が決まっていることを確認
+      expect(finalState.stage).toBe('ended');
+
+      // チップの合計が保存されていることを確認（総額2000）
+      const totalChips = finalState.players.reduce((sum: number, p: any) => sum + p.chips, 0);
+      expect(totalChips).toBe(2000);
+
+      // 勝者が全ポットを獲得していることを確認
+      const winner = finalState.players.find((p: any) => p.chips === 2000);
+      expect(winner).toBeDefined();
     });
   });
 

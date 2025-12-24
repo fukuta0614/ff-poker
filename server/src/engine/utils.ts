@@ -180,3 +180,19 @@ export const hasOnlyOneActivePlayer = (state: GameState): boolean => {
   const activePlayers = getActivePlayers(state);
   return activePlayers.length === 1;
 };
+
+/**
+ * 全てのアクティブプレイヤーがオールイン（chips === 0）かどうか
+ *
+ * この状態の場合、残りのコミュニティカードを一気に配り、
+ * ショーダウンまで自動進行すべき
+ */
+export const areAllPlayersAllIn = (state: GameState): boolean => {
+  const activePlayers = getActivePlayers(state);
+
+  if (activePlayers.length <= 1) {
+    return false; // 1人以下の場合は「全員オールイン」ではない
+  }
+
+  return activePlayers.every((player) => player.chips === 0);
+};

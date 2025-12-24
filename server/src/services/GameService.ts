@@ -21,12 +21,14 @@ import {
   initializeRound,
   processAction,
   advanceStage,
+  advanceToShowdownForAllIn,
   performShowdown,
   createRandomRNGState,
   isBettingComplete,
   getCurrentBettor,
   hasOnlyOneActivePlayer,
   getActivePlayers,
+  areAllPlayersAllIn,
 } from '@engine/index';
 import { GameManagerV2 } from '../managers/GameManager';
 import type { GameNotifier } from '../websocket/notifier';
@@ -192,13 +194,19 @@ export class GameService {
   /**
    * ステージ進行
    *
-   * Engine層: advanceStage() を呼び出し
+   * Engine層: advanceStage() または advanceToShowdownForAllIn() を呼び出し
    */
   private handleStageAdvance(
     roomId: string,
     state: GameState
   ): E.Either<GameError, GameState> {
-    const result = advanceStage(state);
+    // 全員オールインチェック
+    const allPlayersAllIn = areAllPlayersAllIn(state);
+
+    // 全員オールインの場合は、残りのカードを一気に配ってショーダウンへ
+    const result = allPlayersAllIn
+      ? advanceToShowdownForAllIn(state)
+      : advanceStage(state);
 
     return pipe(
       result,
